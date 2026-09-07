@@ -111,7 +111,7 @@
     <div class="group">
       <span class="glabel">speed</span>
       <button class="btn" id="spdDn">−</button>
-      <div class="meter"><b id="spd">25</b></div>
+      <div class="meter"><b id="spd">45</b></div>
       <button class="btn" id="spdUp">+</button>
     </div>
     <div class="group">
@@ -164,7 +164,7 @@ const cfg = {
   key:  localStorage.ebo_key  || '',
   id:   localStorage.ebo_id   || '',
 };
-let ws=null, lastState={}, speed=+(localStorage.ebo_speed||25), volPending=null, lastTele=0;
+let ws=null, lastState={}, speed=+(localStorage.ebo_speed||45), volPending=null, lastTele=0;
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400); }
 function auth(){ return { 'Authorization':'Bearer '+cfg.key }; }
@@ -281,11 +281,15 @@ function vector(){
   if(down.has('up'))ly-=1; if(down.has('down'))ly+=1; if(down.has('left'))rx-=1; if(down.has('right'))rx+=1;
   return {ly,rx};
 }
+// The SE 2 has a start-throttle threshold (~30): below it the wheels don't overcome friction, so
+// forward/back at low speed looks "dead" while turning still rotates. Floor the magnitude so any
+// key press actually moves; `speed` scales above the floor.
+const MOVE_FLOOR = 35;
 setInterval(()=>{
   if(!cfg.id) return;
   const {ly,rx}=vector();
-  if(ly||rx){ const m=Math.hypot(ly,rx)||1;
-    cmd('move',{lx:0,ly:Math.round(ly/m*speed),rx:Math.round(rx/m*speed),ry:0,hold:0.4,buttons:1}).catch(()=>{});
+  if(ly||rx){ const m=Math.hypot(ly,rx)||1, mag=Math.max(speed, MOVE_FLOOR);
+    cmd('move',{lx:0,ly:Math.round(ly/m*mag),rx:Math.round(rx/m*mag),ry:0,hold:0.4,buttons:1}).catch(()=>{});
     moving=true;
   } else if(moving){ cmd('stop').catch(()=>{}); moving=false; }
 },130);

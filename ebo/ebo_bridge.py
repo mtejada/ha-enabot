@@ -209,6 +209,7 @@ class Bridge:
         self._last_activity = time.time()   # last user command (drives auto-standby)
         self._last_rx = time.time()         # last message received FROM the robot (liveness)
         self._last_reconnect = 0.0          # last auto-reconnect (rate-limit)
+        self._reconnect_tries = 0           # 0 = fresh; 1 = rejoined once, escalate to restart next
         self._route_rec = False          # True while recording a route (teach-by-driving)
         self._route_pending = None       # RouteDataInfo from 103206, awaiting a name + save
         # Route/patrol support is model-dependent: the EBO Air 2 firmware ignores these opcodes (the
@@ -1193,10 +1194,22 @@ class Bridge:
             # reuses that dead session, so the robot stays deaf — only a FRESH cloud session revives
             # it. Force a full reconnect. Gated on recent user activity so an idle robot may still
             # doze; rate-limited so it can't thrash.
-            if (self.connected and now - self._last_reconnect >= 20
-                    and now - getattr(self, "_last_activity", 0) < 25
-                    and now - self._last_rx > 12):
+            active = now - getattr(self, "_last_activity", 0) < 25
+            silent = now - self._last_rx > 12
+            if self.connected and active and silent and now - self._last_reconnect >= 20:
                 self._last_reconnect = now
+                if self._reconnect_tries >= 1:
+                    # A fresh rejoin already ran and the robot is STILL silent — this is deep dock
+                    # sleep, which only a full init revives (proven). Exit non-zero; the container's
+                    # restart policy relaunches us with a complete fresh session + handshake.
+                    log("[reconnect] still silent after a rejoin — restarting the engine for a full "
+                        "fresh session")
+                    try:
+                        sys.stdout.flush(); sys.stderr.flush()
+                    except Exception:
+                        pass
+                    os._exit(1)
+                self._reconnect_tries = 1
                 log("[reconnect] robot silent %.0fs during active control — full reconnect (fresh session)"
                     % (now - self._last_rx))
                 try:
@@ -1204,6 +1217,8 @@ class Bridge:
                 except Exception as e:
                     log("[reconnect] failed:", e)
                 self._last_rx = time.time()        # grace window for the robot to come back
+            elif not silent:
+                self._reconnect_tries = 0          # robot is answering again — reset the escalation
             with self.lock:
                 # watchdog: if the command expired, zero it (dead-man's switch)
                 if self.vec_deadline and now > self.vec_deadline:

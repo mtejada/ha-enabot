@@ -287,15 +287,14 @@ function vector(){
 // forward/back at low speed looks "dead" while turning still rotates. Floor the magnitude so any
 // key press actually moves; `speed` scales above the floor.
 const MOVE_FLOOR = 35;
-let dockWarned=0;
+let dockHinted=0;
 setInterval(()=>{
   if(!cfg.id) return;
   const {ly,rx}=vector();
   if(ly||rx){
-    // the SE 2 won't drive while parked on the charger — tell the user instead of failing silently
-    if(lastState.docked==='true' || lastState.charging==='true'){
-      if(Date.now()-dockWarned>3000){ dockWarned=Date.now(); toast('⚡ on the charger — lift it onto the floor to drive'); }
-      return;
+    // On the charger the robot drives OFF when you push forward — so DON'T block it, just hint once.
+    if((lastState.docked==='true'||lastState.charging==='true') && Date.now()-dockHinted>4000){
+      dockHinted=Date.now(); toast('⚡ on the charger — hold ↑ (forward) to drive off it');
     }
     const m=Math.hypot(ly,rx)||1, mag=Math.max(speed, MOVE_FLOOR);
     cmd('move',{lx:0,ly:Math.round(ly/m*mag),rx:Math.round(rx/m*mag),ry:0,hold:0.4,buttons:1}).catch(()=>{});

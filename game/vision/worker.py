@@ -58,9 +58,14 @@ def log(*a):
 
 
 # ---- control API helpers --------------------------------------------------
+_post_warned = 0.0
 def post_detections(payload: dict) -> None:
+    global _post_warned
     try:
-        S.post(f"{API_URL}/api/v1/robots/{ROBOT_ID}/detections", json=payload, timeout=8)
+        r = S.post(f"{API_URL}/api/v1/robots/{ROBOT_ID}/detections", json=payload, timeout=8)
+        if r.status_code >= 300 and time.time() - _post_warned > 5:
+            _post_warned = time.time()          # rate-limit: don't spam once per frame
+            log(f"post rejected {r.status_code}: {r.text[:300]}")
     except requests.RequestException as e:
         log("post failed:", e)
 

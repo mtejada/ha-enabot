@@ -212,6 +212,7 @@ class Bridge:
         self._last_reconnect = 0.0          # last auto-reconnect (rate-limit)
         self._reconnect_tries = 0           # 0 = fresh; 1 = rejoined once, escalate to restart next
         self._drive_dock_since = 0.0        # when the user started driving while still on the charger
+        self._t_start = time.time()         # process start — startup grace so reconnect isn't seen as "stuck"
         self._route_rec = False          # True while recording a route (teach-by-driving)
         self._route_pending = None       # RouteDataInfo from 103206, awaiting a name + save
         # Route/patrol support is model-dependent: the EBO Air 2 firmware ignores these opcodes (the
@@ -1229,20 +1230,30 @@ class Bridge:
                     self.vec_deadline = 0.0
                 v = dict(self.vec)
                 moving = any(v[k] for k in ("lx", "ly", "rx", "ry"))
-            # Undock watchdog: if you're actively driving but the robot is STILL on the charger, a
-            # live session isn't enough — a deeply-docked robot only leaves after a full init (its
-            # telemetry keeps flowing, so the silence watchdog above never fires). Restart the bridge;
-            # run.sh relaunches it with a fresh handshake, and the continued drive then takes it off.
+            # Auto-undock / stale-session heal: you're trying to drive but the robot won't move —
+            # either it's STILL on the charger (a deeply-docked robot only leaves after a full init;
+            # its telemetry keeps flowing, so the silence watchdog above never fires), or the session
+            # went stale and no live stream is arriving (a rejoin alone isn't always enough — the RTM
+            # control link can stay dead, so move opcodes reach nobody). Either way a full restart is
+            # the reliable cure: run.sh relaunches with a fresh handshake, and the continued drive then
+            # takes it off the dock. Drive intent is gap-tolerant (_last_move), so pulsed API moves and
+            # the UI's ~10 Hz hold both count; we only arm this once a fresh session has had time to
+            # come up (streaming), so the reconnect window itself doesn't trip it.
             tb = (self.telemetry or {}).get("battery", {})
             on_charger = isinstance(tb, dict) and (tb.get("adapterStatus", -1) != -1
                                                    or bool(tb.get("chargeStatus")))
-            if moving and on_charger:
+            streaming = bool(self.video and self.video.is_streaming())
+            driving = now - self._last_move < 3.0        # recent drive INTENT, tolerant of brief gaps
+            # startup grace: a freshly-restarted process isn't streaming for the first few seconds
+            # while it reconnects — don't mistake that for a stale session and restart-loop.
+            stuck = driving and (on_charger or not streaming) and now - self._t_start > 15
+            if stuck:
                 if not self._drive_dock_since:
                     self._drive_dock_since = now
-                elif now - self._drive_dock_since > 8 and now - self._last_reconnect >= 20:
+                elif now - self._drive_dock_since > 5 and now - self._last_reconnect >= 20:
                     self._last_reconnect = now
-                    log("[undock] driving but still on the charger — restarting for a fresh session "
-                        "so it can leave the dock")
+                    why = "still on the charger" if on_charger else "no live stream (stale session)"
+                    log("[undock] driving but %s — restarting for a fresh session so it can move" % why)
                     try:
                         sys.stdout.flush(); sys.stderr.flush()
                     except Exception:

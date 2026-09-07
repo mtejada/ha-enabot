@@ -225,7 +225,7 @@ class Detection(BaseModel):
     conf: float = 1.0
     bbox: list[float]                            # [x, y, w, h] normalized 0..1
     depth: float | None = None                   # 0 = near .. 1 = far (relative), or meters if metric
-    mask: list[list[float]] | None = None        # optional polygon(s): [[x,y],...] normalized (occlusion)
+    mask: list[list[list[float]]] | None = None  # optional polygon(s): [[[x,y],...], ...] normalized (occlusion)
     track_id: int | None = None                  # short-term tracker id (ByteTrack/BoTSORT)
     entity_id: str | None = None                 # stable game id (API assigns via track/re-id)
     embedding: list[float] | None = Field(default=None, exclude=True)  # re-id vector (worker→API only)

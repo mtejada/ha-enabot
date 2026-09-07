@@ -74,12 +74,16 @@ async def sandbox():
 _GAME_WEB = Path("/app/game_web")
 
 
+_NO_CACHE = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+
 @app.get("/game", include_in_schema=False)
 async def game_index():
     p = _GAME_WEB / "index.html"
     if not p.exists():
         return RedirectResponse("/sandbox")
-    return FileResponse(p)
+    # no-cache: the frontend changes often; never let a browser run a stale index.html
+    return FileResponse(p, headers=_NO_CACHE)
 
 
 @app.get("/game/{asset:path}", include_in_schema=False)
@@ -88,7 +92,7 @@ async def game_asset(asset: str):
     p = (_GAME_WEB / asset).resolve()
     if _GAME_WEB not in p.parents or not p.is_file():
         return RedirectResponse("/game")
-    return FileResponse(p)
+    return FileResponse(p, headers=_NO_CACHE)
 
 
 @app.get("/health", tags=["meta"], summary="Liveness probe (no auth)")
@@ -259,8 +263,9 @@ async def stream_mjpeg(robot_id: str, eng: EngineClient = Depends(get_engine)):
 app.include_router(v1)
 
 # vision / game layer (ebo-vision worker ingest + game entity state + detections stream)
-from .game import router as game_router  # noqa: E402
+from .game import router as game_router, ws_router as game_ws_router  # noqa: E402
 app.include_router(game_router)
+app.include_router(game_ws_router)
 
 
 # ---------------------------------------------------------------- realtime (WS)

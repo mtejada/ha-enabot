@@ -27,6 +27,9 @@ from .schemas import Detection, DetectionsFrame, Entity, EntityPatch
 from .security import require_api_key
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
+# WebSocket routes can't use the HTTP bearer dependency (FastAPI passes a WebSocket, not a Request,
+# so HTTPBearer raises) — they authenticate manually via the ?token= query param instead.
+ws_router = APIRouter(prefix="/api/v1")
 
 # --- game rules -------------------------------------------------------------
 # Animals → bosses. With prompt-free detection labels are arbitrary, so match by keyword.
@@ -196,7 +199,7 @@ async def damage_entity(robot_id: str, eid: str, amount: int = Query(default=10,
 
 
 # --- realtime (game ← API) --------------------------------------------------
-@router.websocket("/robots/{robot_id}/detections/stream")
+@ws_router.websocket("/robots/{robot_id}/detections/stream")
 async def detections_stream(ws: WebSocket, robot_id: str, token: str | None = Query(default=None),
                             hz: float = Query(default=10.0, ge=1, le=30)):
     s: Settings = get_settings()

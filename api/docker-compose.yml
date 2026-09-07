@@ -1,0 +1,46 @@
+# EBO SE 2 — full stack: the engine (holds the Agora session) + a FastAPI control API in front.
+# Your consuming app talks ONLY to ebo-api (:8080). Configure everything in .env (see .env.example).
+name: ebo-se2
+
+services:
+  ebo-engine:
+    build: ../ebo                 # the existing engine image (bundles the Agora SDK, ffmpeg, RTSP)
+    platform: linux/amd64         # required: the Agora SDK is x86_64 only
+    restart: unless-stopped
+    environment:
+      EBO_EMAIL: ${EBO_EMAIL}
+      EBO_PASSWORD: ${EBO_PASSWORD}
+      EBO_PAYLOAD_KEY: ${EBO_PAYLOAD_KEY}
+      EBO_SIGN_KEY: ${EBO_SIGN_KEY}
+      EBO_HOST: ${EBO_HOST:-ebox-eu.enabotserverintl.com}
+      EBO_REGION: ${EBO_REGION:-GB}
+      EBO_API_TOKEN: ${EBO_API_TOKEN}
+      EBO_VIDEO: ${EBO_VIDEO:-true}
+      EBO_AUDIO: ${EBO_AUDIO:-true}
+      EBO_VIDEO_MAX_HEIGHT: ${EBO_VIDEO_MAX_HEIGHT:-720}
+      EBO_TTS_TIMBRE: ${EBO_TTS_TIMBRE:-en-US-AvaMultilingualNeural}
+      EBO_TTS_LANGUAGE: ${EBO_TTS_LANGUAGE:-en-US}
+    volumes:
+      - engine_data:/data
+    ports:
+      - "${RTSP_PORT:-8554}:8554"  # RTSP — optional, only if you want to open the stream directly
+    expose:
+      - "8098"                     # data API — internal to the compose network only
+
+  ebo-api:
+    build: .
+    restart: unless-stopped
+    depends_on: [ebo-engine]
+    environment:
+      ENGINE_URL: http://ebo-engine:8098
+      ENGINE_TOKEN: ${EBO_API_TOKEN}          # must match the engine's EBO_API_TOKEN
+      API_KEYS: ${API_KEYS}                    # client bearer keys (comma-separated)
+      ALLOW_NO_AUTH: ${ALLOW_NO_AUTH:-false}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      RTSP_PUBLIC_HOST: ${RTSP_PUBLIC_HOST:-localhost}
+      RTSP_PORT: ${RTSP_PORT:-8554}
+    ports:
+      - "${API_PORT:-8080}:8080"
+
+volumes:
+  engine_data:

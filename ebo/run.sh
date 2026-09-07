@@ -38,8 +38,8 @@ pget() {  # pget <key> <default>
 }
 pbool() { [ "$(pget "$1" "$2")" = "true" ] && echo 1 || echo 0; }
 
-export EBO_REGION="$(pget region GB)"
-export EBO_HOST="$(pget host ebox-eu.enabotserverintl.com)"
+export EBO_REGION="${EBO_REGION:-$(pget region GB)}"
+export EBO_HOST="${EBO_HOST:-$(pget host ebox-eu.enabotserverintl.com)}"
 export EBO_VIDEO="$(pbool video true)"
 export EBO_AUDIO="$(pbool audio true)"
 export EBO_TALK="$(pbool talk false)"

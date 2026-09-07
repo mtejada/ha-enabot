@@ -1,0 +1,330 @@
+{
+  "timbres": [
+    {
+      "name": "Ava",
+      "value": "en-US-AvaMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AvaMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Andrew",
+      "value": "en-US-AndrewMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AndrewMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Nova Turbo",
+      "value": "en-US-NovaTurboMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-NovaTurboMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Alloy Turbo",
+      "value": "en-US-AlloyTurboMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AlloyTurboMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Aria Dragon HD Latest",
+      "value": "en-US-Aria:DragonHDLatestNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AriaDragonHDLatest-General-Audio.wav"
+    },
+    {
+      "name": "Adam Dragon HD Latest",
+      "value": "en-US-Adam:DragonHDLatestNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AdamDragonHDLatest-General-Audio.wav"
+    },
+    {
+      "name": "Cora",
+      "value": "en-US-CoraMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-CoraMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Evelyn",
+      "value": "en-US-EvelynMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-EvelynMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Amanda",
+      "value": "en-US-AmandaMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AmandaMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Phoebe",
+      "value": "en-US-PhoebeMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-PhoebeMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Nancy",
+      "value": "en-US-NancyMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-NancyMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Ava Dragon HD Latest",
+      "value": "en-US-Ava:DragonHDLatestNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AvaDragonHDLatest-General-Audio.wav"
+    },
+    {
+      "name": "Emma Dragon HD Latest",
+      "value": "en-US-Emma:DragonHDLatestNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-EmmaDragonHDLatest-General-Audio.wav"
+    },
+    {
+      "name": "Emma",
+      "value": "en-US-EmmaMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-EmmaMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Jenny",
+      "value": "en-US-JennyMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-JennyMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Bree Dragon HD Latest",
+      "value": "en-US-Bree:DragonHDLatestNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-BreeDragonHDLatest-General-Audio.wav"
+    },
+    {
+      "name": "Christopher",
+      "value": "en-US-ChristopherMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-ChristopherMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Brandon",
+      "value": "en-US-BrandonMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-BrandonMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Adam",
+      "value": "en-US-AdamMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AdamMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Derek",
+      "value": "en-US-DerekMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-DerekMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Dustin",
+      "value": "en-US-DustinMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-DustinMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Lewis",
+      "value": "en-US-LewisMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-LewisMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Andrew Dragon HD Latest",
+      "value": "en-US-Andrew:DragonHDLatestNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-AndrewDragonHDLatest-General-Audio.wav"
+    },
+    {
+      "name": "Brian",
+      "value": "en-US-BrianMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-BrianMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Ryan",
+      "value": "en-US-RyanMultilingualNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-RyanMultilingual-General-Audio.wav"
+    },
+    {
+      "name": "Ana (English)",
+      "value": "en-US-AnaNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/en-US-Ana-General-Audio.wav"
+    },
+    {
+      "name": "Gisela (Deutsch)",
+      "value": "de-DE-GiselaNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/de-DE-Gisela-General-audio.wav"
+    },
+    {
+      "name": "Eloise (French)",
+      "value": "fr-FR-EloiseNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/fr-FR-Eloise-General-audio.wav"
+    },
+    {
+      "name": "Irene (Spain)",
+      "value": "es-ES-IreneNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/es-ES-Irene-General-Audio.wav"
+    },
+    {
+      "name": "Pierina (Italy)",
+      "value": "it-IT-PierinaNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/it-IT-PierinaNeural-General-Audio.wav"
+    },
+    {
+      "name": "Aoi (Japan)",
+      "value": "ja-JP-AoiNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/ja-JP-Aoi-General-Audio.wav"
+    },
+    {
+      "name": "SeoHyeon (Korean)",
+      "value": "ko-KR-SeoHyeonNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/ko-KR-SeoHyeon-General-Audio.wav"
+    },
+    {
+      "name": "xiaoshuang (Chinese)",
+      "value": "zh-CN-XiaoshuangNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/zh-CN-Xiaoshuang-General-Audio.wav"
+    },
+    {
+      "name": "曉曼(粤语)",
+      "value": "zh-HK-HiuMaanNeural",
+      "provider": "microsoft",
+      "preview_url": "https://ai.azure.com/speechassetscache/ttsvoice/Masterpieces/zh-HK-HiuMaan-General-Audio.wav"
+    }
+  ],
+  "languages": [
+    {
+      "name": "English",
+      "value": "en-US"
+    },
+    {
+      "name": "简体中文",
+      "value": "zh-CN"
+    },
+    {
+      "name": "繁體中文",
+      "value": "zh-TW"
+    },
+    {
+      "name": "日本語",
+      "value": "ja-JP"
+    },
+    {
+      "name": "한국어",
+      "value": "ko-KR"
+    },
+    {
+      "name": "Deutsche",
+      "value": "de-DE"
+    },
+    {
+      "name": "Français",
+      "value": "fr-FR"
+    },
+    {
+      "name": "Português",
+      "value": "pt-PT"
+    },
+    {
+      "name": "Español",
+      "value": "es-ES"
+    },
+    {
+      "name": "Italiano",
+      "value": "it-IT"
+    },
+    {
+      "name": "Polski",
+      "value": "pl-PL"
+    },
+    {
+      "name": "粵語",
+      "value": "zh-HK"
+    },
+    {
+      "name": "ภาษาไทย",
+      "value": "th-TH"
+    },
+    {
+      "name": "عربي",
+      "value": "ar-AE"
+    },
+    {
+      "name": "čeština",
+      "value": "cs-CZ"
+    },
+    {
+      "name": "עִברִית",
+      "value": "he-IL"
+    },
+    {
+      "name": "Русский",
+      "value": "ru-RU"
+    },
+    {
+      "name": "Svenska",
+      "value": "sv-SE"
+    },
+    {
+      "name": "Nederlands",
+      "value": "nl-NL"
+    },
+    {
+      "name": "suomi",
+      "value": "fi-FI"
+    },
+    {
+      "name": "norsk",
+      "value": "nb-NO"
+    },
+    {
+      "name": "Dansk",
+      "value": "da-DK"
+    },
+    {
+      "name": "ελληνικά",
+      "value": "el-GR"
+    },
+    {
+      "name": "Română",
+      "value": "ro-RO"
+    },
+    {
+      "name": "Slovák",
+      "value": "sk-SK"
+    },
+    {
+      "name": "Tiếng Việt",
+      "value": "vi-VN"
+    },
+    {
+      "name": "Indonesia",
+      "value": "id-ID"
+    },
+    {
+      "name": "Bahasa Melayu",
+      "value": "ms-MY"
+    },
+    {
+      "name": "Türkçe",
+      "value": "tr-TR"
+    },
+    {
+      "name": "magyar",
+      "value": "hu-HU"
+    }
+  ]
+}

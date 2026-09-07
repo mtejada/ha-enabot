@@ -68,6 +68,34 @@
   #vstat.wait .vdot{background:var(--mut);animation:pulse 1s infinite}
   #vstat .sub{color:var(--mut);font-weight:400;letter-spacing:0}
   @keyframes pulse{50%{opacity:.3}}
+
+  /* ---- phones: narrow portrait OR short landscape. Keep the 3 top HUDs from colliding and make the
+         bottom dock (and each group) WRAP so no control is clipped; touch-sized buttons. ---- */
+  @media (max-width:760px), (max-height:520px){
+    #tele{gap:9px;padding:6px 9px}
+    #tele .opt{display:none}                    /* drop wifi+task to free width beside the center pill */
+    #vstat{padding:6px 10px;font-size:11px;max-width:38vw;overflow:hidden}
+    #vstat .sub{display:none}
+    #topr{padding:6px;gap:5px;flex-wrap:wrap;max-width:38vw;justify-content:flex-end}
+    #topr .btn{padding:7px 9px}
+    #vmode,#robotSel,#connBtn{display:none}     /* advanced/auto — pill shows transport, gear reconnects */
+    /* bottom dock: full-width, centered, groups wrap without clipping */
+    #dock{left:8px;right:8px;bottom:8px;transform:none;max-width:none;width:auto;
+          gap:8px 10px;padding:10px;justify-content:center}
+    .group{border-right:0;padding-right:0;flex-wrap:wrap;justify-content:center}
+    .dpad{grid-template-columns:repeat(3,48px);grid-template-rows:repeat(3,48px);gap:6px}
+    .dpad .btn{font-size:19px}
+    .btn{padding:9px 11px}                       /* comfortable tap targets */
+    input[type=text]{width:auto;flex:1 1 130px;min-width:110px;max-width:60vw}
+    #voice{flex:1 1 120px;max-width:46vw}
+    #help{max-width:calc(100vw - 24px)}
+  }
+  /* very short (landscape phones): shrink dpad + dock so they don't swallow the video */
+  @media (max-height:460px){
+    #dock{gap:6px 8px;padding:7px;bottom:6px}
+    .dpad{grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px)}
+    .btn{padding:7px 9px}
+  }
 </style>
 </head>
 <body>
@@ -81,8 +109,8 @@
   <div id="tele" class="hud">
     <div class="stat"><b><span id="conn" class="dot"></span><span id="name">—</span></b><span>robot</span></div>
     <div class="stat"><b id="batt">—</b><span>battery</span></div>
-    <div class="stat"><b id="wifi">—</b><span>wifi</span></div>
-    <div class="stat"><b id="task">—</b><span>task</span></div>
+    <div class="stat opt"><b id="wifi">—</b><span>wifi</span></div>
+    <div class="stat opt"><b id="task">—</b><span>task</span></div>
   </div>
 
   <!-- video transport indicator -->

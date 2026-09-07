@@ -207,6 +207,8 @@ class Bridge:
         if self._ui.get("imageStyle") is not None:
             self.settings["imageStyle"] = self._ui["imageStyle"]
         self._last_activity = time.time()   # last user command (drives auto-standby)
+        self._last_rx = time.time()         # last message received FROM the robot (liveness)
+        self._last_reconnect = 0.0          # last auto-reconnect (rate-limit)
         self._route_rec = False          # True while recording a route (teach-by-driving)
         self._route_pending = None       # RouteDataInfo from 103206, awaiting a name + save
         # Route/patrol support is model-dependent: the EBO Air 2 firmware ignores these opcodes (the
@@ -1079,6 +1081,9 @@ class Bridge:
                 self._publish_now(mid, payload)
 
     def _on_rtm(self, event):
+        # Any inbound RTM message means the robot's control channel is alive. When it dozes, these
+        # stop entirely — which is how the auto-reconnect watchdog notices a stale session.
+        self._last_rx = time.time()
         try:
             raw = event.message
             if isinstance(raw, (bytes, bytearray)):
@@ -1183,6 +1188,22 @@ class Bridge:
                         self.set_connected(False)
                     except Exception as e:
                         log("[standby] failed:", e)
+            # Auto-reconnect watchdog: if you're actively driving but the robot has gone SILENT (its
+            # telemetry/echoes stopped), the Agora control session went stale. A plain wake/RTC-rejoin
+            # reuses that dead session, so the robot stays deaf — only a FRESH cloud session revives
+            # it. Force a full reconnect. Gated on recent user activity so an idle robot may still
+            # doze; rate-limited so it can't thrash.
+            if (self.connected and now - self._last_reconnect >= 20
+                    and now - getattr(self, "_last_activity", 0) < 25
+                    and now - self._last_rx > 12):
+                self._last_reconnect = now
+                log("[reconnect] robot silent %.0fs during active control — full reconnect (fresh session)"
+                    % (now - self._last_rx))
+                try:
+                    self._force_rejoin()
+                except Exception as e:
+                    log("[reconnect] failed:", e)
+                self._last_rx = time.time()        # grace window for the robot to come back
             with self.lock:
                 # watchdog: if the command expired, zero it (dead-man's switch)
                 if self.vec_deadline and now > self.vec_deadline:

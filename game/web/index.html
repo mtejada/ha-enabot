@@ -163,8 +163,29 @@ function draw(){
     else { npcs++; drawNpc(x,y,w,h,cx,cy,k,e,d); }
   }
   drawDamage();
+  drawDoomHud(R, bosses, npcs);
   $('#count').textContent=`bosses: ${bosses} · npcs: ${npcs}`;
   requestAnimationFrame(draw);
+}
+
+// Doom-style status bar along the bottom of the video — covers the EBO watermark + timestamp.
+// Hidden in debug mode (draw() returns before this when debug is on).
+function drawDoomHud(R, bosses, npcs){
+  const bh=Math.max(30, R.h*0.065), y=R.y+R.h-bh, x=R.x, w=R.w;
+  const g=ctx.createLinearGradient(0,y,0,y+bh);
+  g.addColorStop(0,'#4a3b2f'); g.addColorStop(.14,'#7a5f49'); g.addColorStop(.5,'#4f4033'); g.addColorStop(1,'#211913');
+  ctx.fillStyle=g; ctx.fillRect(x,y,w,bh);
+  ctx.fillStyle='rgba(255,190,110,.35)'; ctx.fillRect(x,y,w,2);
+  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillRect(x,y+bh-2,w,2);
+  ctx.fillStyle='rgba(0,0,0,.4)';
+  for(let rx=x+12; rx<x+w-6; rx+=30){ ctx.beginPath(); ctx.arc(rx,y+6,2,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(rx,y+bh-6,2,0,7); ctx.fill(); }
+  const fs=Math.round(bh*0.5); ctx.font=`bold ${fs}px "Courier New",ui-monospace,monospace`; ctx.textBaseline='middle';
+  ctx.textAlign='left';  ctx.fillStyle='#ffcf7a'; ctx.fillText('EBO DOOM', x+16, y+bh/2);
+  ctx.textAlign='right'; ctx.fillStyle='#ff7a5c'; ctx.fillText(`BOSS ${bosses}`, x+w*0.62, y+bh/2);
+  ctx.fillStyle='#8fd0ff'; ctx.fillText(`NPC ${npcs}`, x+w*0.82, y+bh/2);
+  ctx.fillStyle='#c9ffb0'; ctx.fillText(`VEL ${speed}`, x+w-14, y+bh/2);
+  ctx.textBaseline='alphabetic';
 }
 
 function drawBoss(x,y,w,h,cx,cy,k,e,d){

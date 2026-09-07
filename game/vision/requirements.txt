@@ -6,3 +6,4 @@ transformers>=4.44
 ftfy
 wcwidth
 git+https://github.com/ultralytics/CLIP.git
+lap>=0.5.12

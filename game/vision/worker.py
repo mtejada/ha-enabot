@@ -31,12 +31,16 @@ RTSP_URL      = os.environ.get("RTSP_URL", "rtsp://ebo-engine:8554/ebo")
 API_URL       = os.environ.get("EBO_API_URL", "http://ebo-api:8080").rstrip("/")
 API_KEY       = os.environ.get("EBO_API_KEY", "")
 ROBOT_ID      = os.environ.get("ROBOT_ID", "ebo")
+# mjpeg = read frames from the API's MJPEG proxy (robust, plain JPEGs — no h264/RTSP finickiness);
+# rtsp = read the engine's RTSP directly (lower latency but cv2/ffmpeg can choke on the H.264).
+VIDEO_SOURCE  = os.environ.get("VIDEO_SOURCE", "mjpeg").lower()
 FPS           = float(os.environ.get("FPS", "6"))
 IMGSZ         = int(os.environ.get("IMGSZ", "640"))
 DEPTH_IMGSZ   = int(os.environ.get("DEPTH_IMGSZ", "512"))
 CONF          = float(os.environ.get("CONF", "0.35"))
 DEPTH_MAX_M   = float(os.environ.get("DEPTH_MAX_M", "4.0"))     # metres mapped to depth=1.0 (far)
 ENABLE_REID   = os.environ.get("ENABLE_REID", "true").lower() in ("1", "true", "yes")
+DETECT_ALL    = os.environ.get("DETECT_ALL", "false").lower() in ("1", "true", "yes")  # prompt-free: detect everything
 MASK_POINTS   = int(os.environ.get("MASK_POINTS", "24"))        # polygon points sent per detection (0=off)
 CAMERA_KEEPALIVE = float(os.environ.get("CAMERA_KEEPALIVE", "25"))  # secs; re-assert wake+camera
 # animals become bosses; everything else in the prompt list becomes an NPC house / prop.
@@ -96,10 +100,24 @@ def real_loop():
     import cv2
     from ultralytics import YOLOE, YOLO
 
-    log("loading YOLOE-26s-seg (open-vocab seg)…")
-    det = YOLOE(os.environ.get("SEG_WEIGHTS", "yoloe-26s-seg.pt"))
-    det.set_classes(PROMPTS)                                   # text prompts: animals + props
-    names = det.names
+    if DETECT_ALL:
+        # prompt-free: run over YOLOE's built-in ~4.5k-class vocabulary — detects everything, no
+        # prompt list. Falls back to a text-prompt model if the -pf weight isn't available.
+        pf = os.environ.get("SEG_WEIGHTS_PF", "yoloe-26s-seg-pf.pt")
+        try:
+            log(f"loading {pf} (prompt-free — detect EVERYTHING)…")
+            det = YOLOE(pf)
+            names = det.names
+            log(f"prompt-free vocabulary: {len(names)} classes")
+        except Exception as e:
+            log("prompt-free load failed, falling back to text prompts:", e)
+            det = YOLOE(os.environ.get("SEG_WEIGHTS", "yoloe-26s-seg.pt")); det.set_classes(PROMPTS)
+            names = det.names
+    else:
+        log("loading YOLOE-26s-seg (open-vocab seg)…")
+        det = YOLOE(os.environ.get("SEG_WEIGHTS", "yoloe-26s-seg.pt"))
+        det.set_classes(PROMPTS)                               # text prompts: animals + props
+        names = det.names
 
     log("loading YOLO26n-depth (metric)…")
     depth = YOLO(os.environ.get("DEPTH_WEIGHTS", "yolo26n-depth.pt"))
@@ -124,6 +142,7 @@ def real_loop():
     cap = _open(cv2)
     last_ka = 0.0
     period = 1.0 / FPS
+    hb_n, hb_t = 0, time.time()
     while True:
         t0 = time.time()
         if t0 - last_ka > CAMERA_KEEPALIVE:
@@ -166,8 +185,8 @@ def real_loop():
                 d = {
                     "label": label,
                     "conf": round(float(confs[i]), 3),
-                    "bbox": [round(x1 / W, 4), round(y1 / H, 4),
-                             round((x2 - x1) / W, 4), round((y2 - y1) / H, 4)],
+                    "bbox": [round(float(x1) / W, 4), round(float(y1) / H, 4),
+                             round(float(x2 - x1) / W, 4), round(float(y2 - y1) / H, 4)],
                     "depth": depth_n,
                     "track_id": ids[i],
                 }
@@ -183,15 +202,55 @@ def real_loop():
                 dets.append(d)
 
         post_detections({"ts": time.time(), "source_w": W, "source_h": H, "detections": dets})
+        hb_n += 1
+        if t0 - hb_t >= 5:
+            log(f"{hb_n / (t0 - hb_t):.1f} fps · last frame: {len(dets)} detections")
+            hb_n, hb_t = 0, t0
         dt = time.time() - t0
         if dt < period:
             time.sleep(period - dt)
 
 
+class MjpegReader:
+    """Read frames from the API's MJPEG proxy — plain JPEGs, so no h264/RTSP decode headaches.
+    Exposes the same .read() -> (ok, frame_bgr) contract as cv2.VideoCapture."""
+    def __init__(self, url, cv2):
+        self.url, self.cv2 = url, cv2
+        self._open()
+
+    def _open(self):
+        self.r = requests.get(self.url, stream=True, timeout=(5, 30))
+        self.it = self.r.iter_content(16384)
+        self.buf = b""
+
+    def read(self):
+        for _ in range(6000):
+            a = self.buf.find(b"\xff\xd8")
+            b = self.buf.find(b"\xff\xd9", a + 2) if a >= 0 else -1
+            if a >= 0 and b >= 0:
+                jpg = self.buf[a:b + 2]; self.buf = self.buf[b + 2:]
+                img = self.cv2.imdecode(np.frombuffer(jpg, np.uint8), self.cv2.IMREAD_COLOR)
+                if img is not None:
+                    return True, img
+                continue
+            try:
+                chunk = next(self.it)
+            except Exception:
+                return False, None
+            if not chunk:
+                return False, None
+            self.buf += chunk
+        return False, None
+
+
 def _open(cv2):
+    if VIDEO_SOURCE == "mjpeg":
+        url = f"{API_URL}/api/v1/robots/{ROBOT_ID}/stream/mjpeg?token={API_KEY}"
+        log("video source: MJPEG", url.split("?")[0])
+        return MjpegReader(url, cv2)
     cap = cv2.VideoCapture(RTSP_URL, cv2.CAP_FFMPEG)
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    log("RTSP:", RTSP_URL, "opened" if cap.isOpened() else "FAILED (will retry)")
+    log("video source: RTSP", RTSP_URL, "opened" if cap.isOpened() else "FAILED (will retry)")
     return cap
 
 

@@ -29,8 +29,12 @@ from .security import require_api_key
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
 
 # --- game rules -------------------------------------------------------------
-# COCO animals → bosses. Everything else the worker is told to look for → NPC houses / props.
+# Animals → bosses. With prompt-free detection labels are arbitrary, so match by keyword.
 ANIMALS = {"cat", "dog", "bird", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"}
+ANIMAL_WORDS = ("cat", "kitten", "dog", "puppy", "bird", "horse", "sheep", "cow", "elephant", "bear",
+                "zebra", "giraffe", "animal", "pet", "rabbit", "hamster", "fish", "turtle", "lizard",
+                "snake", "mouse", "rat", "fox", "deer", "lion", "tiger", "monkey", "pig", "goat",
+                "duck", "chicken", "parrot", "hedgehog", "ferret", "guinea pig")
 DEFAULT_HP = {"boss": 100, "npc_house": 1, "prop": 1}
 REID_THRESHOLD = 0.82          # cosine similarity to call two crops "the same individual"
 STALE_ENTITY_SECS = 3600       # forget an entity unseen this long (bound memory)
@@ -40,7 +44,8 @@ _BOSS_NAMES = ["Whiskers", "Mittens", "Fang", "Bacon", "Nugget", "Pixel", "Biscu
 
 
 def role_for(label: str) -> str:
-    return "boss" if label in ANIMALS else "npc_house"
+    l = label.lower()
+    return "boss" if any(w in l for w in ANIMAL_WORDS) else "npc_house"
 
 
 def _boss_name(label: str) -> str:

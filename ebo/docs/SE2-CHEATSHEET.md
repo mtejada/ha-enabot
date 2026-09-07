@@ -79,3 +79,20 @@ docker compose down               # stop
 - **Dozing:** the robot naps; a stale session ACKs commands it then ignores. Fix: `cmd wake ''` or `docker compose restart`.
 - **Battery** drains fast under heavy driving — `cmd dock ''` to recharge.
 - `status:0` from a command means *accepted*, not necessarily *acted* (see dozing).
+
+## Sacar el robot de la base / si no se mueve (self-service)
+
+El SE 2 no maneja mientras está en el cargador; para salir hay que **manejar hacia adelante**
+(entra de espaldas al dock, sale de frente). El engine ya se auto-recupera, así que:
+
+1. **Mantené ↑ (adelante) ~10-15s.** Sale solo. Si está profundamente dormido, el *undock watchdog*
+   reinicia el bridge automáticamente (~15-20s, el video parpadea) y al seguir apretando ↑, sale.
+2. **Si igual no sale:** sesión nueva a mano y volvé a manejar:
+   ```bash
+   cd ~/projects/ha-enabot/api && docker compose restart ebo-engine   # ~15s
+   ```
+   Esperá que reconecte y mantené ↑.
+3. **Recargar:** botón **Dock** (o `cmd dock ''`) — vuelve a la base solo.
+
+Notas: sólo los comandos de **movimiento** arman los watchdogs (el keepalive de visión no interfiere).
+`docked=true/charging=true` en `/api/v1/robots/ebo/state` = está en la base.

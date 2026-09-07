@@ -71,6 +71,14 @@ async def sandbox():
     return FileResponse(_STATIC / "sandbox.html")
 
 
+@app.get("/game", include_in_schema=False)
+async def game_index():
+    p = Path("/app/game_web/index.html")
+    if not p.exists():
+        return RedirectResponse("/sandbox")
+    return FileResponse(p)
+
+
 @app.get("/health", tags=["meta"], summary="Liveness probe (no auth)")
 async def health():
     return {"status": "ok"}
@@ -237,6 +245,10 @@ async def stream_mjpeg(robot_id: str, eng: EngineClient = Depends(get_engine)):
 
 
 app.include_router(v1)
+
+# vision / game layer (ebo-vision worker ingest + game entity state + detections stream)
+from .game import router as game_router  # noqa: E402
+app.include_router(game_router)
 
 
 # ---------------------------------------------------------------- realtime (WS)

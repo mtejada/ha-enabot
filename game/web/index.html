@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>EBO Boss Hunt</title>
+<style>
+  :root{ --fg:#eaf2ff; --mut:#8b97a8; --acc:#3ea6ff; --bad:#ff3b6b; --ok:#39d98a; --warn:#ffb020;
+         --panel:rgba(12,16,24,.82); --line:rgba(255,255,255,.12); }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;user-select:none;
+    font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
+  #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+  #video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  #fx{position:fixed;inset:0;pointer-events:none}         /* game overlay canvas */
+  #hit{position:fixed;inset:0}                            /* click layer for hitting bosses */
+  .hud{position:fixed;z-index:6;background:var(--panel);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:12px;padding:8px 12px}
+  #top{top:12px;left:12px;display:flex;gap:14px;align-items:center}
+  #top b{font-size:15px} #top span{color:var(--mut);font-size:11px}
+  #topr{top:12px;right:12px;display:flex;gap:6px}
+  .btn{background:rgba(28,34,46,.9);border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+    color:var(--fg);cursor:pointer;font:inherit}
+  .btn:hover{border-color:var(--acc)}
+  #cfg{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.65);display:none;place-items:center}
+  #cfg.show{display:grid}
+  #cfgbox{background:#11151d;border:1px solid var(--line);border-radius:14px;padding:20px;width:min(440px,92vw)}
+  #cfgbox h2{margin:0 0 10px} #cfgbox label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px}
+  #cfgbox input{width:100%;background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:9px 11px;color:var(--fg)}
+  #cfgbox .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+  #legend{bottom:12px;left:12px;color:var(--mut);font-size:12px;max-width:340px}
+  #legend b{color:var(--fg)}
+  #count{bottom:12px;right:12px;font-size:12px}
+</style>
+</head>
+<body>
+  <div id="stage"><img id="video" alt=""></div>
+  <canvas id="fx"></canvas>
+  <div id="hit"></div>
+
+  <div id="top" class="hud"><div><b id="title">EBO Boss Hunt</b><br><span id="conn">desconectado</span></div></div>
+  <div id="topr" class="hud">
+    <button class="btn" id="connBtn">Conectar</button>
+    <button class="btn" id="gear">⚙</button>
+  </div>
+  <div id="legend" class="hud"><b>Animales = BOSSES</b> (clic para atacar) · <b>Objetos = casas NPC</b>
+    (acércate para el diálogo). El tamaño respeta la profundidad.</div>
+  <div id="count" class="hud">bosses: 0 · npcs: 0</div>
+
+  <div id="cfg"><div id="cfgbox">
+    <h2>Conectar al juego</h2>
+    <label>API base</label><input id="cBase" placeholder="http://localhost:8080">
+    <label>API key</label><input id="cKey" placeholder="API_KEYS del .env">
+    <label>Robot id</label><input id="cId" value="ebo">
+    <div class="row"><button class="btn" id="cCancel">Cancelar</button><button class="btn" id="cSave">Guardar y conectar</button></div>
+  </div></div>
+
+<script>
+const $=s=>document.querySelector(s);
+const cfg={ base:(localStorage.g_base||location.origin).replace(/\/$/,''), key:localStorage.g_key||'',
+            id:localStorage.g_id||'ebo' };
+const video=$('#video'), fx=$('#fx'), ctx=fx.getContext('2d');
+let ws=null, latest={frame:{detections:[],source_w:0,source_h:0}, entities:[]}, entMap={};
+let dmgFx=[];   // floating damage numbers
+
+function resize(){ fx.width=innerWidth; fx.height=innerHeight; }
+addEventListener('resize',resize); resize();
+
+// ---- connect ----
+function connect(){
+  if(!cfg.key){ openCfg(); return; }
+  video.src=`${cfg.base}/api/v1/robots/${cfg.id}/stream/mjpeg?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`;
+  openWs(); $('#conn').textContent='conectando…';
+}
+function openWs(){
+  if(ws) try{ws.close()}catch(e){}
+  const u=cfg.base.replace(/^http/,'ws')+`/api/v1/robots/${cfg.id}/detections/stream?token=${encodeURIComponent(cfg.key)}&hz=12`;
+  ws=new WebSocket(u);
+  ws.onopen=()=>$('#conn').textContent='conectado';
+  ws.onclose=()=>{ $('#conn').textContent='reconectando…'; setTimeout(()=>{ if(cfg.key) openWs(); },1500); };
+  ws.onmessage=m=>{ latest=JSON.parse(m.data); entMap={}; (latest.entities||[]).forEach(e=>entMap[e.id]=e); };
+}
+
+// ---- geometry: map the video's letterboxed rect inside the stage ----
+function videoRect(){
+  const vw=video.naturalWidth||latest.frame.source_w||16, vh=video.naturalHeight||latest.frame.source_h||9;
+  const cw=innerWidth, ch=innerHeight, s=Math.min(cw/vw, ch/vh);
+  const w=vw*s, h=vh*s; return {x:(cw-w)/2, y:(ch-h)/2, w, h};
+}
+// depth 0=near .. 1=far  → a scale multiplier for overlay art (near feels bigger/closer)
+const depthScale=d=> d==null ? 1 : (1.35 - 0.8*Math.max(0,Math.min(1,d)));
+
+// ---- render loop ----
+function draw(){
+  ctx.clearRect(0,0,fx.width,fx.height);
+  const R=videoRect(); const dets=(latest.frame&&latest.frame.detections)||[];
+  // far → near so nearer bosses draw on top (depth ordering)
+  const order=[...dets].sort((a,b)=>(b.depth??0.5)-(a.depth??0.5));
+  let bosses=0, npcs=0;
+  for(const d of order){
+    const e=d.entity_id&&entMap[d.entity_id]; const [nx,ny,nw,nh]=d.bbox;
+    const x=R.x+nx*R.w, y=R.y+ny*R.h, w=nw*R.w, h=nh*R.h, cx=x+w/2, cy=y+h/2;
+    const k=depthScale(d.depth);
+    if((d.role||'')==='boss'){ bosses++; drawBoss(x,y,w,h,cx,cy,k,e,d); }
+    else { npcs++; drawNpc(x,y,w,h,cx,cy,k,e,d); }
+  }
+  drawDamage();
+  $('#count').textContent=`bosses: ${bosses} · npcs: ${npcs}`;
+  requestAnimationFrame(draw);
+}
+
+function drawBoss(x,y,w,h,cx,cy,k,e,d){
+  const t=performance.now()/1000;
+  const hp=e?e.hp/e.max_hp:1, defeated=e&&e.status&&e.status.includes('defeated');
+  const col=defeated?'#6b7280':(hp>0.5?'#39d98a':hp>0.25?'#ffb020':'#ff3b6b');
+  // pulsing aura (radial)
+  const rr=Math.max(w,h)*0.9*(1+0.06*Math.sin(t*4));
+  const g=ctx.createRadialGradient(cx,cy, rr*0.2, cx,cy, rr);
+  g.addColorStop(0, hexA(col,defeated?.10:.28)); g.addColorStop(1, hexA(col,0));
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.fill();
+  // targeting brackets
+  ctx.strokeStyle=col; ctx.lineWidth=3; const L=Math.min(w,h)*0.28;
+  bracket(x,y, L,L); bracket(x+w,y, -L,L); bracket(x,y+h, L,-L); bracket(x+w,y+h, -L,-L);
+  // nameplate + HP bar (scaled by depth)
+  const bw=Math.max(120,w)*Math.min(1.2,k), bx=cx-bw/2, by=y-46*k;
+  ctx.font=`${Math.round(13*k)}px system-ui`; ctx.textAlign='center';
+  ctx.fillStyle='rgba(0,0,0,.6)'; roundRect(bx,by, bw, 34*k, 7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.fillText((e&&e.name)||'BOSS', cx, by+15*k);
+  // hp bar
+  ctx.fillStyle='rgba(255,255,255,.15)'; roundRect(bx+8, by+20*k, bw-16, 7*k, 3); ctx.fill();
+  ctx.fillStyle=col; roundRect(bx+8, by+20*k, (bw-16)*Math.max(0,hp), 7*k, 3); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.55)'; ctx.font=`${Math.round(9*k)}px system-ui`;
+  ctx.fillText(defeated?'DERROTADO':`${e?e.hp:100}/${e?e.max_hp:100}`, cx, by+27.5*k);
+  // remember hit rect for the click layer
+  d._hit={x,y,w,h,id:d.entity_id};
+}
+
+function drawNpc(x,y,w,h,cx,cy,k,e,d){
+  // little house glyph at the object + name; a dialog when the robot is "close" (big/near)
+  ctx.font=`${Math.round(26*k)}px serif`; ctx.textAlign='center';
+  ctx.fillText('🏠', cx, y-6*k);
+  ctx.font=`${Math.round(11*k)}px system-ui`; ctx.fillStyle='rgba(0,0,0,.6)';
+  const nm=(e&&e.name)|| d.label, tw=ctx.measureText(nm).width+12;
+  roundRect(cx-tw/2, y+2, tw, 16*k, 6); ctx.fill();
+  ctx.fillStyle='#cfe'; ctx.fillText(nm, cx, y+13*k);
+  const near = (d.depth!=null? d.depth<0.4 : (w*h)/(fx.width*fx.height) > 0.03);
+  if(near){
+    const line=(e&&e.attributes&&e.attributes.dialog) || `¡Hola! Bienvenido a la casa de ${nm}.`;
+    bubble(cx, y-40*k, line, k);
+  }
+}
+
+// ---- helpers ----
+function bracket(px,py,dx,dy){ ctx.beginPath(); ctx.moveTo(px,py+dy); ctx.lineTo(px,py); ctx.lineTo(px+dx,py); ctx.stroke(); }
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`; }
+function bubble(cx,y,text,k){
+  ctx.font=`${Math.round(12*k)}px system-ui`; ctx.textAlign='left';
+  const pad=8*k, tw=Math.min(240, ctx.measureText(text).width), w=tw+pad*2, h=22*k, x=cx-w/2;
+  ctx.fillStyle='rgba(20,24,34,.92)'; roundRect(x,y-h,w,h,8); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.2)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-5,y); ctx.lineTo(cx+5,y); ctx.lineTo(cx,y+7); ctx.closePath(); ctx.fillStyle='rgba(20,24,34,.92)'; ctx.fill();
+  ctx.fillStyle='#dfe8ff'; ctx.fillText(text, x+pad, y-h/2+4*k);
+}
+function drawDamage(){
+  const now=performance.now(); dmgFx=dmgFx.filter(f=>now-f.t<900);
+  for(const f of dmgFx){ const p=(now-f.t)/900; ctx.globalAlpha=1-p; ctx.fillStyle='#ff3b6b';
+    ctx.font=`bold ${28-6*p}px system-ui`; ctx.textAlign='center';
+    ctx.fillText('-'+f.n, f.x, f.y-40*p); ctx.globalAlpha=1; }
+}
+
+// ---- attack a boss by clicking it ----
+$('#hit').addEventListener('click', async ev=>{
+  const dets=(latest.frame&&latest.frame.detections)||[];
+  for(const d of dets){ const r=d._hit; if(!r||!r.id) continue;
+    if(ev.clientX>=r.x&&ev.clientX<=r.x+r.w&&ev.clientY>=r.y&&ev.clientY<=r.y+r.h){
+      dmgFx.push({x:ev.clientX,y:ev.clientY,n:25,t:performance.now()});
+      try{ const e=await (await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/entities/${r.id}/damage?amount=25`,
+             {method:'POST',headers:{Authorization:'Bearer '+cfg.key}})).json();
+           if(entMap[e.id]) entMap[e.id]=e; }catch(_){}
+      break;
+    }
+  }
+});
+
+// ---- settings ----
+function openCfg(){ $('#cBase').value=cfg.base; $('#cKey').value=cfg.key; $('#cId').value=cfg.id; $('#cfg').classList.add('show'); }
+$('#gear').onclick=openCfg; $('#connBtn').onclick=connect; $('#cCancel').onclick=()=>$('#cfg').classList.remove('show');
+$('#cSave').onclick=()=>{ cfg.base=$('#cBase').value.replace(/\/$/,''); cfg.key=$('#cKey').value.trim(); cfg.id=$('#cId').value.trim()||'ebo';
+  localStorage.g_base=cfg.base; localStorage.g_key=cfg.key; localStorage.g_id=cfg.id; $('#cfg').classList.remove('show'); connect(); };
+
+requestAnimationFrame(draw);
+if(cfg.key) connect(); else openCfg();
+</script>
+</body>
+</html>

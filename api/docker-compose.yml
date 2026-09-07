@@ -39,9 +39,11 @@ services:
     build: .
     restart: unless-stopped
     depends_on: [ebo-engine]
-    # live-edit the cockpit without rebuilding (remove for a sealed production image)
+    # live-edit the API + cockpit without rebuilding (remove for a sealed production image;
+    # a container restart reloads the code since uvicorn runs without --reload)
     volumes:
-      - ./app/static:/app/app/static:ro
+      - ./app:/app/app
+      - ../game/web:/app/game_web:ro     # the AR game frontend, served at /game
     environment:
       ENGINE_URL: http://ebo-engine:8098
       ENGINE_TOKEN: ${EBO_API_TOKEN}          # must match the engine's EBO_API_TOKEN

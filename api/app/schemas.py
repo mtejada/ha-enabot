@@ -209,3 +209,54 @@ class Status(BaseModel):
     version: str
     engine_reachable: bool
     robot_count: int
+
+
+# ============================================================================
+#  Vision / game layer — the ebo-vision worker POSTs detections here; the game
+#  frontend reads detections (live) + entities (persistent state) to render an
+#  AR world (animals = bosses, objects = NPC houses) over the video.
+# ============================================================================
+class Detection(BaseModel):
+    """One detection in a frame. Coordinates are normalized 0..1 (top-left origin) so the frontend
+    scales them to whatever size it draws the video at."""
+    model_config = ConfigDict(extra="ignore")
+    label: str                                  # raw model class, e.g. "cat", "shoe"
+    role: str = "prop"                           # game role: boss | npc_house | prop
+    conf: float = 1.0
+    bbox: list[float]                            # [x, y, w, h] normalized 0..1
+    depth: float | None = None                   # 0 = near .. 1 = far (relative), or meters if metric
+    mask: list[list[float]] | None = None        # optional polygon(s): [[x,y],...] normalized (occlusion)
+    track_id: int | None = None                  # short-term tracker id (ByteTrack/BoTSORT)
+    entity_id: str | None = None                 # stable game id (API assigns via track/re-id)
+    embedding: list[float] | None = Field(default=None, exclude=True)  # re-id vector (worker→API only)
+
+
+class DetectionsFrame(BaseModel):
+    ts: float = 0.0
+    source_w: int = 0
+    source_h: int = 0
+    detections: list[Detection] = []
+
+
+class Entity(BaseModel):
+    """A persistent game entity resolved from detections (a specific boss/NPC). State survives across
+    frames so a boss keeps its HP / status even as it moves or briefly leaves the view."""
+    id: str
+    role: str                                    # boss | npc_house | prop
+    label: str
+    name: str | None = None                      # display name (VLM/derived); e.g. "Sir Whiskers"
+    hp: int = 100
+    max_hp: int = 100
+    status: list[str] = []                        # e.g. ["enraged", "poisoned"]
+    attributes: dict[str, Any] = {}               # freeform: color, description, dialog lines…
+    last_seen: float = 0.0
+    bbox: list[float] | None = None               # last known (for rendering when between frames)
+    depth: float | None = None
+
+
+class EntityPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hp: int | None = Field(default=None, ge=0)
+    name: str | None = None
+    status: list[str] | None = None
+    attributes: dict[str, Any] | None = None

@@ -21,7 +21,13 @@ ebo-engine ─RTSP:8554→ ebo-vision (YOLO-seg + depth + tracking + re-id)
 |---|---|---|
 | Game API (detections ingest, persistent entities, damage, WS) | `api/app/game.py` | ✅ done |
 | Game frontend (canvas over video, depth-scaled bosses/NPCs, click-to-attack, dialogs) | `game/web/index.html` → served at **`/game`** | ✅ skeleton |
-| Vision worker (RTSP → YOLO-seg + depth + track + re-id embeddings → POST detections) | `game/vision/` | ⏳ model stack being chosen (2026 research) |
+| Vision worker (RTSP → seg + depth + track + re-id → POST detections) | `game/vision/` | ✅ built (fake + real modes) |
+
+**Vision stack** (2026 research, measured on a CPU/WSL2 box → ~6-8 fps):
+YOLOE-26s-seg (open-vocabulary segmentation — animals **and** arbitrary props by text prompt, so
+"shoe" works despite not being a COCO class) · YOLO26n-depth @512 (metric depth) · BoT-SORT
+tracking · DINOv2-small re-id embeddings (384-d, kept identity across appearances). Ultralytics is
+AGPL-3.0 — fine for personal use; the worker is an isolated service.
 
 ## Run
 
@@ -74,11 +80,28 @@ The overlay scales art by `depth` (near→bigger) and draws far→near so nearer
 When the worker sends per-detection **masks**, the frontend will use them for true occlusion (aura /
 NPC art goes *behind* the animal) — the "3D boss dropped into the room" look.
 
-## Roadmap (after the model research lands)
+## Run the vision worker
 
-- [ ] `game/vision/worker.py`: RTSP in → detect+segment animals + open-vocab objects (e.g. "shoe")
-      → monocular depth → tracker + re-id embeddings → POST detections. Docker service in the compose.
-- [ ] Occlusion from segmentation masks (send `mask`, cut the aura behind the animal).
+It's an **optional, heavy** service (torch + models), so it only starts with the `game` profile.
+
+```bash
+cd api
+# 1) set VISION_API_KEY (one of API_KEYS) in .env; keep VISION_MODE=fake to smoke-test the pipeline
+docker compose --profile game up -d --build ebo-vision      # fake: synthetic dets, no models
+# 2) go real once you want live detection (first run downloads the weights into the vision_weights volume):
+#    set VISION_MODE=real in .env, then:
+docker compose --profile game up -d ebo-vision
+docker compose logs -f ebo-vision
+```
+
+Open `http://localhost:8080/game` — animals in front of the robot become bosses, props become NPC
+houses. Tuning envs (see `.env.example`): `VISION_MODE`, `VISION_FPS`, `VISION_REID`, `VISION_PROPS`
+(the open-vocab prompt list). The worker also keeps the camera awake so RTSP always has frames.
+
+## Roadmap
+
+- [x] Vision worker (`game/vision/worker.py`) — done (fake + real).
+- [ ] Occlusion from segmentation masks in the frontend (worker already sends `mask`; draw the aura behind the animal).
 - [ ] Optional small VLM to name/describe each boss ("orange tabby, white paws") → richer identity.
 - [ ] Real 3D boss meshes (offscreen render composited with the depth map) as a visual upgrade.
 - [ ] Game logic: attacks, status effects, NPC quests/dialog trees, autonomous "patrol & hunt".

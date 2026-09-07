@@ -1,0 +1,8 @@
+requests>=2.31
+numpy>=1.26,<2.3
+opencv-python-headless>=4.10
+ultralytics>=8.4.142
+transformers>=4.44
+ftfy
+wcwidth
+git+https://github.com/ultralytics/CLIP.git

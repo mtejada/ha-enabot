@@ -36,6 +36,9 @@ services:
     build: .
     restart: unless-stopped
     depends_on: [ebo-engine]
+    # live-edit the cockpit without rebuilding (remove for a sealed production image)
+    volumes:
+      - ./app/static:/app/app/static:ro
     environment:
       ENGINE_URL: http://ebo-engine:8098
       ENGINE_TOKEN: ${EBO_API_TOKEN}          # must match the engine's EBO_API_TOKEN

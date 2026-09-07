@@ -59,6 +59,15 @@
   .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:30;background:var(--panel2);
     border:1px solid var(--line);border-radius:9px;padding:8px 14px;box-shadow:var(--shadow);opacity:0;transition:.2s;pointer-events:none}
   .toast.show{opacity:1}
+  /* video transport status pill */
+  #vstat{top:12px;left:50%;transform:translateX(-50%);padding:7px 13px;display:flex;gap:8px;align-items:center;font-weight:600;font-size:12px;letter-spacing:.03em}
+  #vstat .vdot{width:9px;height:9px;border-radius:50%;background:var(--mut)}
+  #vstat.rtc .vdot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  #vstat.rtc{color:var(--ok)}
+  #vstat.mjpeg .vdot{background:var(--warn)} #vstat.mjpeg{color:var(--warn)}
+  #vstat.wait .vdot{background:var(--mut);animation:pulse 1s infinite}
+  #vstat .sub{color:var(--mut);font-weight:400;letter-spacing:0}
+  @keyframes pulse{50%{opacity:.3}}
 </style>
 </head>
 <body>
@@ -75,6 +84,9 @@
     <div class="stat"><b id="wifi">—</b><span>wifi</span></div>
     <div class="stat"><b id="task">—</b><span>task</span></div>
   </div>
+
+  <!-- video transport indicator -->
+  <div id="vstat" class="hud wait"><span class="vdot"></span><span id="vstatT">—</span><span id="vstatS" class="sub"></span></div>
 
   <!-- top right -->
   <div id="topr" class="hud">
@@ -152,7 +164,7 @@ const cfg = {
   key:  localStorage.ebo_key  || '',
   id:   localStorage.ebo_id   || '',
 };
-let ws=null, lastState={}, speed=+(localStorage.ebo_speed||25), volPending=null;
+let ws=null, lastState={}, speed=+(localStorage.ebo_speed||25), volPending=null, lastTele=0;
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400); }
 function auth(){ return { 'Authorization':'Bearer '+cfg.key }; }
@@ -183,20 +195,23 @@ async function connect(){
 // ---- video: WebRTC (low latency) with MJPEG fallback ----
 let videoMode = localStorage.ebo_vmode || 'auto';   // 'auto' (try WebRTC) | 'mjpeg'
 let pc=null, rtcWatch=null;
-function vbadge(t){ $('#vmode').textContent='Video: '+t; }
+// the big status pill: kind = 'rtc' (green) | 'mjpeg' (amber) | 'wait' (grey)
+function vstat(kind, main, sub){ $('#vstat').className='hud '+kind;
+  $('#vstatT').textContent=main; $('#vstatS').textContent = sub?('· '+sub):''; }
+function vmodeLabel(){ $('#vmode').textContent = (videoMode==='mjpeg') ? 'Prefer: MJPEG' : 'Prefer: Auto'; }
 function stopMjpeg(){ const v=$('#video'); v.onerror=null; v.src=''; v.hidden=true; }
 function stopWebRTC(){ clearTimeout(rtcWatch); if(pc){ try{pc.close()}catch(e){} pc=null; }
   const r=$('#rtc'); r.srcObject=null; r.hidden=true; }
 function startMjpeg(note){
   stopWebRTC(); const v=$('#video');
   v.src = `${cfg.base}/api/v1/robots/${cfg.id}/stream/mjpeg?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`;
-  v.hidden=false; $('#novid').style.display='none'; vbadge('MJPEG'+(note?' · '+note:''));
+  v.hidden=false; $('#novid').style.display='none'; vstat('mjpeg','MJPEG', note||'~0.5–1 s');
   v.onerror=()=>{ $('#novid').style.display=''; setTimeout(()=>{ if(videoMode==='mjpeg'||!pc) startMjpeg(); },2000); };
 }
 function waitIce(p,ms){ return new Promise(res=>{ if(p.iceGatheringState==='complete') return res();
   const t=setTimeout(res,ms); p.addEventListener('icegatheringstatechange',()=>{ if(p.iceGatheringState==='complete'){clearTimeout(t);res();} }); }); }
 async function startWebRTC(){
-  stopMjpeg(); stopWebRTC(); vbadge('RTC · connecting…');
+  stopMjpeg(); stopWebRTC(); vstat('wait','WebRTC','connecting…');
   const info = await api(`/api/v1/robots/${cfg.id}/stream`);          // {rtsp_url,...}
   const m = /rtsp:\/\/[^:/]+:(\d+)\/(.+)$/.exec(info.rtsp_url) || [];
   const rtspPort = +(m[1]||8554), path = m[2]||cfg.id;
@@ -209,30 +224,31 @@ async function startWebRTC(){
   pc.ontrack = e => { const r=$('#rtc'); r.srcObject=e.streams[0]; r.hidden=false; $('#novid').style.display='none';
     r.play?.().catch(()=>{}); };
   pc.onconnectionstatechange = () => {
-    if(pc && pc.connectionState==='connected') vbadge('RTC ●');
-    if(pc && ['failed','disconnected','closed'].includes(pc.connectionState) && videoMode!=='rtc-forced')
-      startMjpeg('RTC dropped'); };
+    if(!pc) return;
+    if(pc.connectionState==='connected') vstat('rtc','WEBRTC','~200 ms · low latency');
+    else if(['failed','disconnected','closed'].includes(pc.connectionState)) startMjpeg('WebRTC dropped'); };
   const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
   await waitIce(pc, 900);
   const resp = await fetch(whep, {method:'POST', headers:{'Content-Type':'application/sdp'},
                                   body: pc.localDescription.sdp});
   if(!resp.ok) throw new Error('WHEP '+resp.status);
   await pc.setRemoteDescription({type:'answer', sdp: await resp.text()});
-  rtcWatch = setTimeout(()=>{ if(!pc || pc.connectionState!=='connected'){ startMjpeg('RTC timeout'); } }, 5000);
+  rtcWatch = setTimeout(()=>{ if(!pc || pc.connectionState!=='connected'){ startMjpeg('WebRTC timeout'); } }, 5000);
 }
 async function startVideo(){
-  if(!cfg.id) return;
+  if(!cfg.id) return; vmodeLabel();
   if(videoMode==='mjpeg'){ startMjpeg(); return; }
   try{ await startWebRTC(); }              // 'auto': try WebRTC…
-  catch(e){ startMjpeg('RTC failed'); }    // …fall back to MJPEG on any error
+  catch(e){ startMjpeg('WebRTC failed'); } // …fall back to MJPEG on any error
 }
 $('#vmode').onclick = ()=>{ videoMode = (videoMode==='mjpeg')?'auto':'mjpeg';
-  localStorage.ebo_vmode=videoMode; startVideo(); };
+  localStorage.ebo_vmode=videoMode; vmodeLabel(); startVideo(); };
+vmodeLabel();
 function openWs(){
   if(ws) try{ws.close()}catch(e){}
   const u = cfg.base.replace(/^http/,'ws') + `/api/v1/robots/${cfg.id}/events?token=${encodeURIComponent(cfg.key)}`;
   ws = new WebSocket(u);
-  ws.onmessage = m => { const d=JSON.parse(m.data); if(d.state){ lastState=d.state; renderState(d); } };
+  ws.onmessage = m => { const d=JSON.parse(m.data); if(d.state){ lastTele=Date.now(); lastState=d.state; renderState(d); } };
   ws.onclose = ()=> setTimeout(()=>{ if(cfg.key) openWs(); }, 2500);
 }
 function renderState(d){
@@ -316,7 +332,17 @@ $('#spdUp').onclick=()=>setSpeed(speed+5); $('#spdDn').onclick=()=>setSpeed(spee
 $('#volUp').onclick=()=>bumpVol(+5); $('#volDn').onclick=()=>bumpVol(-5);
 $('#laser').onclick=()=>toggle('laser'); $('#night').onclick=cycleNight;
 $('#cam').onclick=()=>toggle('camera'); $('#mic').onclick=()=>toggle('listen');
-$('#wakeBtn').onclick=()=>{cmd('wake');toast('waking')};
+$('#wakeBtn').onclick=()=>{cmd('wake');startVideo();lastTele=Date.now();toast('waking')};
+// doze watchdog: the SE 2 naps hard — when telemetry stops arriving the session is stale and video
+// freezes. Detect the gap, wake the robot and reconnect the video automatically.
+setInterval(()=>{
+  if(!cfg.id || !cfg.key || !lastTele) return;
+  if(Date.now()-lastTele > 10000){
+    lastTele = Date.now();                 // don't hammer; wait another window before retrying
+    toast('robot dozed — reconnecting…');
+    cmd('wake').catch(()=>{}); startVideo();
+  }
+},5000);
 $('#dockBtn').onclick=()=>{cmd('dock');toast('docking')};
 $('#sleepBtn').onclick=()=>{cmd('sleep');toast('sleeping')};
 $('#snapBtn').onclick=()=>window.open(`${cfg.base}/api/v1/robots/${cfg.id}/snapshot?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`);

@@ -11,7 +11,14 @@
   html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;user-select:none;
     font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
   #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-  #video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  #video,#rtc{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#000}
+  #vstat{top:12px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:8px;align-items:center;
+    font-weight:600;font-size:12px;cursor:pointer}
+  #vstat .vdot{width:9px;height:9px;border-radius:50%;background:var(--mut)}
+  #vstat.rtc{color:var(--ok)} #vstat.rtc .vdot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  #vstat.mjpeg{color:var(--warn)} #vstat.mjpeg .vdot{background:var(--warn)}
+  #vstat.wait .vdot{animation:pulse 1s infinite} #vstat #vstatS{color:var(--mut);font-weight:400}
+  @keyframes pulse{50%{opacity:.3}}
   #fx{position:fixed;inset:0;pointer-events:none}         /* game overlay canvas */
   #hit{position:fixed;inset:0}                            /* click layer for hitting bosses */
   .hud{position:fixed;z-index:6;background:var(--panel);backdrop-filter:blur(8px);
@@ -34,8 +41,9 @@
 </style>
 </head>
 <body>
-  <div id="stage"><img id="video" alt=""></div>
+  <div id="stage"><video id="rtc" autoplay playsinline hidden></video><img id="video" alt=""></div>
   <canvas id="fx"></canvas>
+  <div id="vstat" class="hud vs wait" title="clic para cambiar transporte de video"><span class="vdot"></span><span id="vstatT">—</span><span id="vstatS"></span></div>
   <div id="hit"></div>
 
   <div id="top" class="hud"><div><b id="title">EBO Boss Hunt</b><br><span id="conn">desconectado</span></div></div>
@@ -70,9 +78,34 @@ addEventListener('resize',resize); resize();
 // ---- connect ----
 function connect(){
   if(!cfg.key){ openCfg(); return; }
-  video.src=`${cfg.base}/api/v1/robots/${cfg.id}/stream/mjpeg?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`;
-  openWs(); $('#conn').textContent='conectando…';
+  startVideo(); openWs(); $('#conn').textContent='conectando…';
 }
+
+// ---- video: WebRTC (baja latencia) con fallback a MJPEG + indicador ----
+let pc=null, rtcWatch=null, videoMode=localStorage.g_vmode||'auto';   // auto | mjpeg
+function vstat(kind,main,sub){ const p=$('#vstat'); p.className='hud '+kind; $('#vstatT').textContent=main; $('#vstatS').textContent=sub?('· '+sub):''; }
+function stopMjpeg(){ const v=$('#video'); v.onerror=null; v.src=''; v.hidden=true; }
+function stopWebRTC(){ clearTimeout(rtcWatch); if(pc){try{pc.close()}catch(e){}pc=null;} const r=$('#rtc'); r.srcObject=null; r.hidden=true; }
+function startMjpeg(note){ stopWebRTC(); const v=$('#video');
+  v.src=`${cfg.base}/api/v1/robots/${cfg.id}/stream/mjpeg?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`;
+  v.hidden=false; vstat('mjpeg','MJPEG',note||'~0.5–1s');
+  v.onerror=()=>setTimeout(()=>{ if(videoMode==='mjpeg'||!pc) startMjpeg(); },2000); }
+function waitIce(p,ms){ return new Promise(res=>{ if(p.iceGatheringState==='complete')return res();
+  const t=setTimeout(res,ms); p.addEventListener('icegatheringstatechange',()=>{ if(p.iceGatheringState==='complete'){clearTimeout(t);res();} }); }); }
+async function startWebRTC(){ stopMjpeg(); stopWebRTC(); vstat('wait','WebRTC','conectando…');
+  const info=await (await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/stream`,{headers:{Authorization:'Bearer '+cfg.key}})).json();
+  const m=/rtsp:\/\/[^:/]+:(\d+)\/(.+)$/.exec(info.rtsp_url)||[], rp=+(m[1]||8554), path=m[2]||cfg.id, wp=8189+(rp-8554);
+  const host=new URL(cfg.base).hostname, whep=`${location.protocol}//${host}:${wp}/${path}/whep`;
+  pc=new RTCPeerConnection({iceServers:[]}); pc.addTransceiver('video',{direction:'recvonly'}); pc.addTransceiver('audio',{direction:'recvonly'});
+  pc.ontrack=e=>{ const r=$('#rtc'); r.srcObject=e.streams[0]; r.hidden=false; r.play?.().catch(()=>{}); };
+  pc.onconnectionstatechange=()=>{ if(!pc)return; if(pc.connectionState==='connected') vstat('rtc','WEBRTC','~200 ms');
+    else if(['failed','disconnected','closed'].includes(pc.connectionState)) startMjpeg('WebRTC cayó'); };
+  const offer=await pc.createOffer(); await pc.setLocalDescription(offer); await waitIce(pc,900);
+  const resp=await fetch(whep,{method:'POST',headers:{'Content-Type':'application/sdp'},body:pc.localDescription.sdp});
+  if(!resp.ok) throw new Error('WHEP '+resp.status); await pc.setRemoteDescription({type:'answer',sdp:await resp.text()});
+  rtcWatch=setTimeout(()=>{ if(!pc||pc.connectionState!=='connected') startMjpeg('WebRTC timeout'); },5000); }
+async function startVideo(){ if(!cfg.id)return; if(videoMode==='mjpeg'){startMjpeg();return;} try{ await startWebRTC(); }catch(e){ startMjpeg('WebRTC falló'); } }
+$('#vstat').onclick=()=>{ videoMode=(videoMode==='mjpeg')?'auto':'mjpeg'; localStorage.g_vmode=videoMode; startVideo(); };
 function openWs(){
   if(ws) try{ws.close()}catch(e){}
   const u=cfg.base.replace(/^http/,'ws')+`/api/v1/robots/${cfg.id}/detections/stream?token=${encodeURIComponent(cfg.key)}&hz=12`;
@@ -84,7 +117,9 @@ function openWs(){
 
 // ---- geometry: map the video's letterboxed rect inside the stage ----
 function videoRect(){
-  const vw=video.naturalWidth||latest.frame.source_w||16, vh=video.naturalHeight||latest.frame.source_h||9;
+  const rtc=$('#rtc'), useRtc=rtc && !rtc.hidden && rtc.videoWidth;
+  const vw=useRtc?rtc.videoWidth:(video.naturalWidth||latest.frame.source_w||16);
+  const vh=useRtc?rtc.videoHeight:(video.naturalHeight||latest.frame.source_h||9);
   const cw=innerWidth, ch=innerHeight, s=Math.min(cw/vw, ch/vh);
   const w=vw*s, h=vh*s; return {x:(cw-w)/2, y:(ch-h)/2, w, h};
 }

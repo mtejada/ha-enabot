@@ -14,7 +14,7 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
     font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden;user-select:none}
   #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-  #video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  #video,#rtc{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#000}
   #novid{position:absolute;color:var(--mut);text-align:center;font-size:13px}
   .hud{position:fixed;z-index:5;background:var(--panel);backdrop-filter:blur(8px);
     border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
@@ -63,6 +63,7 @@
 </head>
 <body>
   <div id="stage">
+    <video id="rtc" autoplay playsinline hidden></video>
     <img id="video" alt="" hidden>
     <div id="novid">no video — press <b>Connect</b> (top-right). Camera turns on automatically.</div>
   </div>
@@ -77,6 +78,7 @@
 
   <!-- top right -->
   <div id="topr" class="hud">
+    <button class="btn" id="vmode" title="video transport (click to switch)">Video: —</button>
     <select id="robotSel" class="btn" title="robot"></select>
     <button class="btn" id="connBtn">Connect</button>
     <button class="btn" id="gear" title="Settings">⚙</button>
@@ -178,12 +180,54 @@ async function connect(){
     toast('connected');
   }catch(e){ toast('connect failed'); }
 }
-function startVideo(){
-  const v=$('#video');
+// ---- video: WebRTC (low latency) with MJPEG fallback ----
+let videoMode = localStorage.ebo_vmode || 'auto';   // 'auto' (try WebRTC) | 'mjpeg'
+let pc=null, rtcWatch=null;
+function vbadge(t){ $('#vmode').textContent='Video: '+t; }
+function stopMjpeg(){ const v=$('#video'); v.onerror=null; v.src=''; v.hidden=true; }
+function stopWebRTC(){ clearTimeout(rtcWatch); if(pc){ try{pc.close()}catch(e){} pc=null; }
+  const r=$('#rtc'); r.srcObject=null; r.hidden=true; }
+function startMjpeg(note){
+  stopWebRTC(); const v=$('#video');
   v.src = `${cfg.base}/api/v1/robots/${cfg.id}/stream/mjpeg?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`;
-  v.hidden=false; $('#novid').style.display='none';
-  v.onerror=()=>{ $('#novid').style.display=''; setTimeout(startVideo,2000); };
+  v.hidden=false; $('#novid').style.display='none'; vbadge('MJPEG'+(note?' · '+note:''));
+  v.onerror=()=>{ $('#novid').style.display=''; setTimeout(()=>{ if(videoMode==='mjpeg'||!pc) startMjpeg(); },2000); };
 }
+function waitIce(p,ms){ return new Promise(res=>{ if(p.iceGatheringState==='complete') return res();
+  const t=setTimeout(res,ms); p.addEventListener('icegatheringstatechange',()=>{ if(p.iceGatheringState==='complete'){clearTimeout(t);res();} }); }); }
+async function startWebRTC(){
+  stopMjpeg(); stopWebRTC(); vbadge('RTC · connecting…');
+  const info = await api(`/api/v1/robots/${cfg.id}/stream`);          // {rtsp_url,...}
+  const m = /rtsp:\/\/[^:/]+:(\d+)\/(.+)$/.exec(info.rtsp_url) || [];
+  const rtspPort = +(m[1]||8554), path = m[2]||cfg.id;
+  const wp = 8189 + (rtspPort - 8554);
+  const host = new URL(cfg.base).hostname;
+  const whep = `${location.protocol}//${host}:${wp}/${path}/whep`;
+  pc = new RTCPeerConnection({iceServers:[]});
+  pc.addTransceiver('video',{direction:'recvonly'});
+  pc.addTransceiver('audio',{direction:'recvonly'});
+  pc.ontrack = e => { const r=$('#rtc'); r.srcObject=e.streams[0]; r.hidden=false; $('#novid').style.display='none';
+    r.play?.().catch(()=>{}); };
+  pc.onconnectionstatechange = () => {
+    if(pc && pc.connectionState==='connected') vbadge('RTC ●');
+    if(pc && ['failed','disconnected','closed'].includes(pc.connectionState) && videoMode!=='rtc-forced')
+      startMjpeg('RTC dropped'); };
+  const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+  await waitIce(pc, 900);
+  const resp = await fetch(whep, {method:'POST', headers:{'Content-Type':'application/sdp'},
+                                  body: pc.localDescription.sdp});
+  if(!resp.ok) throw new Error('WHEP '+resp.status);
+  await pc.setRemoteDescription({type:'answer', sdp: await resp.text()});
+  rtcWatch = setTimeout(()=>{ if(!pc || pc.connectionState!=='connected'){ startMjpeg('RTC timeout'); } }, 5000);
+}
+async function startVideo(){
+  if(!cfg.id) return;
+  if(videoMode==='mjpeg'){ startMjpeg(); return; }
+  try{ await startWebRTC(); }              // 'auto': try WebRTC…
+  catch(e){ startMjpeg('RTC failed'); }    // …fall back to MJPEG on any error
+}
+$('#vmode').onclick = ()=>{ videoMode = (videoMode==='mjpeg')?'auto':'mjpeg';
+  localStorage.ebo_vmode=videoMode; startVideo(); };
 function openWs(){
   if(ws) try{ws.close()}catch(e){}
   const u = cfg.base.replace(/^http/,'ws') + `/api/v1/robots/${cfg.id}/events?token=${encodeURIComponent(cfg.key)}`;

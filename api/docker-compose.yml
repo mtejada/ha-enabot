@@ -20,12 +20,17 @@ services:
       EBO_VIDEO_MAX_HEIGHT: ${EBO_VIDEO_MAX_HEIGHT:-720}
       EBO_TTS_TIMBRE: ${EBO_TTS_TIMBRE:-en-US-AvaMultilingualNeural}
       EBO_TTS_LANGUAGE: ${EBO_TTS_LANGUAGE:-en-US}
+      # WebRTC ICE hosts: IP(s) the browser can reach (mediamtx advertises these). Through Docker
+      # you MUST set this — 127.0.0.1 for a browser on this machine, or your LAN IP for other devices.
+      EBO_HOST_IPS: ${EBO_HOST_IPS:-127.0.0.1}
     volumes:
       - engine_data:/data
     ports:
-      - "${RTSP_PORT:-8554}:8554"  # RTSP — optional, only if you want to open the stream directly
+      - "${RTSP_PORT:-8554}:8554"          # RTSP — optional, direct low-latency players
+      - "${WEBRTC_PORT:-8189}:8189/tcp"    # WebRTC/WHEP signalling (low-latency browser video)
+      - "${WEBRTC_PORT:-8189}:8189/udp"    # WebRTC media/ICE
     expose:
-      - "8098"                     # data API — internal to the compose network only
+      - "8098"                             # data API — internal to the compose network only
 
   ebo-api:
     build: .

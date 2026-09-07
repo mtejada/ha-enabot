@@ -44,8 +44,8 @@
     <button class="btn" id="connBtn">Conectar</button>
     <button class="btn" id="gear">⚙</button>
   </div>
-  <div id="legend" class="hud"><b>Animales = BOSSES</b> (clic para atacar) · <b>Objetos = casas NPC</b>
-    (acércate para el diálogo). El tamaño respeta la profundidad.</div>
+  <div id="legend" class="hud"><b>↑↓←→ caminar</b> · nº velocidad · <b>Animales = BOSSES</b> (clic para atacar) ·
+    <b>Objetos = casas NPC</b> (acércate para el diálogo) · <b>D</b> debug. El tamaño respeta la profundidad.</div>
   <div id="count" class="hud">bosses: 0 · npcs: 0</div>
 
   <div id="cfg"><div id="cfgbox">
@@ -205,6 +205,24 @@ $('#hit').addEventListener('click', async ev=>{
     }
   }
 });
+
+// ---- drive the robot with the arrow keys (walk around and hunt) ----
+const down=new Set(); let moving=false, speed=+(localStorage.g_speed||45);
+const DKEY={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'};
+const MOVE_FLOOR=35;   // the SE 2 needs ~30 before the wheels move
+async function move(body){ try{ await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/move`,
+  {method:'POST',headers:{Authorization:'Bearer '+cfg.key,'Content-Type':'application/json'},body:JSON.stringify(body)});}catch(_){}}
+addEventListener('keydown',e=>{ if(/INPUT|TEXTAREA/.test(document.activeElement.tagName))return;
+  const d=DKEY[e.key]; if(d){ down.add(d); e.preventDefault(); }
+  else if(e.key===' '){ down.clear(); e.preventDefault(); }
+  else if(/^[0-9]$/.test(e.key)){ speed=e.key==='0'?100:(+e.key)*10; localStorage.g_speed=speed; } });
+addEventListener('keyup',e=>{ const d=DKEY[e.key]; if(d) down.delete(d); });
+addEventListener('blur',()=>down.clear());
+setInterval(()=>{ if(!cfg.key||!cfg.id) return;
+  let ly=0,rx=0; if(down.has('up'))ly-=1; if(down.has('down'))ly+=1; if(down.has('left'))rx-=1; if(down.has('right'))rx+=1;
+  if(ly||rx){ const m=Math.hypot(ly,rx)||1, mag=Math.max(speed,MOVE_FLOOR);
+    move({lx:0,ly:Math.round(ly/m*mag),rx:Math.round(rx/m*mag),ry:0,hold:0.4,buttons:1}); moving=true; }
+  else if(moving){ move({ly:0,rx:0,hold:0,buttons:0}); moving=false; } },130);
 
 // ---- settings ----
 function openCfg(){ $('#cBase').value=cfg.base; $('#cKey').value=cfg.key; $('#cId').value=cfg.id; $('#cfg').classList.add('show'); }

@@ -23,6 +23,9 @@ services:
       # WebRTC ICE hosts: IP(s) the browser can reach (mediamtx advertises these). Through Docker
       # you MUST set this — 127.0.0.1 for a browser on this machine, or your LAN IP for other devices.
       EBO_HOST_IPS: ${EBO_HOST_IPS:-127.0.0.1}
+      # 0 = never drop the Agora session (keeps control alive for an interactive API);
+      # set minutes >0 to let the robot sleep after idle.
+      EBO_STANDBY_MINUTES: ${EBO_STANDBY_MINUTES:-0}
     volumes:
       - engine_data:/data
     ports:

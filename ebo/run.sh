@@ -45,7 +45,7 @@ export EBO_AUDIO="$(pbool audio true)"
 export EBO_TALK="$(pbool talk false)"
 export EBO_AUDIO_PT="$(pget audio_codec 8)"
 # auto-standby: option is in MINUTES (0 = never), the bridge wants SECONDS
-_STANDBY_MIN="$(pget standby_after_minutes 5)"
+_STANDBY_MIN="${EBO_STANDBY_MINUTES:-$(pget standby_after_minutes 5)}"
 export EBO_STANDBY_TIMEOUT="$(( _STANDBY_MIN * 60 ))"
 # log level: the Configuration-tab option wins; fall back to the panel setting, then 'info'.
 EBO_LOG_LEVEL="$(jq -r '.log_level // empty' "$OPTS" 2>/dev/null)"

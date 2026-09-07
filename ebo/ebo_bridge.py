@@ -918,6 +918,13 @@ class Bridge:
         """Leave and rejoin the Agora RTC channel: a fresh viewer join is what actually WAKES the
         robot from standby. Mirrors the app reconnecting when you reopen it. connect_agora() restarts
         the video feed on its own because video_on is True."""
+        # Don't nuke a live-or-starting stream. is_streaming() needs a frame within 3s, but the RTC
+        # join→first-frame ramp takes several seconds — during that window a wake/camera/keepalive
+        # call would see "not streaming", rejoin, and reset the ramp, looping forever with black video
+        # (frames decode, then get torn down before is_streaming() ever turns true). If a frame arrived
+        # in the last 10s the robot IS publishing (or just started) — leave it alone.
+        if self.video and self.video.secs_since_frame() < 10:
+            return
         # Rate-limit: a rejoin tears down and rebuilds the whole Agora session (and now asks the
         # cloud for a fresh one). Video needs a few seconds to produce its first frame, so anything
         # that retries on "not streaming yet" could otherwise spin here and hammer the cloud.

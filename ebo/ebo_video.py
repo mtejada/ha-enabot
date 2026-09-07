@@ -262,6 +262,12 @@ class VideoPipeline(IVideoFrameObserver):
         Used to decide whether turning the camera on needs a fresh RTC re-join to WAKE the robot."""
         return self.feeding and self.frames > 0 and (time.time() - self._last_frame) < 3.0
 
+    def secs_since_frame(self):
+        """Seconds since the last decoded video frame (huge if none yet). Lets callers tell a stream
+        that is alive-or-just-starting from one that is genuinely silent — is_streaming()'s 3s window
+        is too tight during the several-second RTC join→first-frame ramp."""
+        return (time.time() - self._last_frame) if self.frames > 0 else 1e9
+
     # ---- camera switch ----
     def start_feed(self):
         with self.lock:

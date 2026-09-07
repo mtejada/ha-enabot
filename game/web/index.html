@@ -41,7 +41,7 @@
 </style>
 </head>
 <body>
-  <div id="stage"><video id="rtc" autoplay playsinline hidden></video><img id="video" alt=""></div>
+  <div id="stage"><video id="rtc" autoplay playsinline muted hidden></video><img id="video" alt=""></div>
   <canvas id="fx"></canvas>
   <div id="vstat" class="hud vs wait" title="clic para cambiar transporte de video"><span class="vdot"></span><span id="vstatT">—</span><span id="vstatS"></span></div>
   <div id="hit"></div>
@@ -134,8 +134,27 @@ async function startWebRTC(){ stopMjpeg(); stopWebRTC(); vstat('wait','WebRTC','
   const m=/rtsp:\/\/[^:/]+:(\d+)\/(.+)$/.exec(info.rtsp_url)||[], rp=+(m[1]||8554), path=m[2]||cfg.id, wp=8189+(rp-8554);
   const host=new URL(cfg.base).hostname, whep=`${location.protocol}//${host}:${wp}/${path}/whep`;
   pc=new RTCPeerConnection({iceServers:[]}); pc.addTransceiver('video',{direction:'recvonly'}); pc.addTransceiver('audio',{direction:'recvonly'});
-  pc.ontrack=e=>{ const r=$('#rtc'); r.srcObject=e.streams[0]; r.hidden=false; r.play?.().catch(()=>{}); };
-  pc.onconnectionstatechange=()=>{ if(!pc)return; if(pc.connectionState==='connected') vstat('rtc','WEBRTC','~200 ms');
+  // muted is REQUIRED for autoplay without a user gesture — an unmuted stream stays paused (black,
+  // every frame dropped) even though media is arriving. Robot audio isn't needed for the game.
+  pc.ontrack=e=>{ const r=$('#rtc'); r.srcObject=e.streams[0]; r.muted=true; r.hidden=false; r.play?.().catch(()=>{}); };
+  // WHEP/ICE can report "connected" while NO media actually decodes (e.g. UDP blocked through
+  // Docker/WSL) — that leaves a black <video>. So don't trust connectionState alone: verify a real
+  // frame is presented (or currentTime advances); if not, fall back to the MJPEG stream which works
+  // everywhere. Otherwise a healthy WebRTC path stays (low latency).
+  let mediaChecked=false;
+  const rtcVideoStats=async()=>{ let f=0,b=0; try{ const s=await pc.getStats();
+      s.forEach(r=>{ if(r.type==='inbound-rtp' && (r.kind==='video'||r.mediaType==='video')){
+        f=r.framesDecoded||0; b=r.bytesReceived||0; } }); }catch(_){} return {f,b}; };
+  const checkMedia=async()=>{ if(mediaChecked||!pc)return; mediaChecked=true;
+    const r=$('#rtc'), a=await rtcVideoStats(), t0=r.currentTime||0;
+    setTimeout(async()=>{ if(!pc)return; const z=await rtcVideoStats();
+      // real, WATCHABLE media = decoder advanced AND playback is actually moving (not paused/stalled
+      // → black). Either failing falls back to the MJPEG stream, which plays everywhere.
+      const decoding=(z.f>a.f || z.b>a.b+2000), playing=(r.videoWidth>0 && (r.currentTime||0)>t0+0.05 && !r.paused);
+      if(decoding && playing) vstat('rtc','WEBRTC','~200 ms');
+      else startMjpeg('WebRTC sin imagen'); }, 4500); };
+  pc.onconnectionstatechange=()=>{ if(!pc)return;
+    if(pc.connectionState==='connected'){ vstat('wait','WebRTC','verificando…'); checkMedia(); }
     else if(['failed','disconnected','closed'].includes(pc.connectionState)) startMjpeg('WebRTC cayó'); };
   const offer=await pc.createOffer(); await pc.setLocalDescription(offer); await waitIce(pc,900);
   const resp=await fetch(whep,{method:'POST',headers:{'Content-Type':'application/sdp'},body:pc.localDescription.sdp});

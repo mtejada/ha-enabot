@@ -72,7 +72,7 @@
 </head>
 <body>
   <div id="stage">
-    <video id="rtc" autoplay playsinline hidden></video>
+    <video id="rtc" autoplay playsinline muted hidden></video>
     <img id="video" alt="" hidden>
     <div id="novid">no video — press <b>Connect</b> (top-right). Camera turns on automatically.</div>
   </div>
@@ -221,7 +221,7 @@ async function startWebRTC(){
   pc = new RTCPeerConnection({iceServers:[]});
   pc.addTransceiver('video',{direction:'recvonly'});
   pc.addTransceiver('audio',{direction:'recvonly'});
-  pc.ontrack = e => { const r=$('#rtc'); r.srcObject=e.streams[0]; r.hidden=false; $('#novid').style.display='none';
+  pc.ontrack = e => { const r=$('#rtc'); r.srcObject=e.streams[0]; r.muted=true; r.hidden=false; $('#novid').style.display='none';
     r.play?.().catch(()=>{}); };
   pc.onconnectionstatechange = () => {
     if(!pc) return;

@@ -125,6 +125,7 @@
       <button class="btn" id="night">Night <small>N</small></button>
       <button class="btn" id="cam">Cam <small>C</small></button>
       <button class="btn" id="mic">Mic <small>M</small></button>
+      <button class="btn" id="hear">🔊 Listen <small>H</small></button>
     </div>
     <div class="group">
       <button class="btn" id="wakeBtn">Wake</button>
@@ -143,7 +144,7 @@
     <div><kbd>1</kbd>…<kbd>9</kbd><kbd>0</kbd> speed 10–100</div>
     <div><kbd>+</kbd> / <kbd>−</kbd> volume</div>
     <div><kbd>L</kbd> laser · <kbd>N</kbd> night · <kbd>C</kbd> cam · <kbd>M</kbd> mic · <kbd>K</kbd> dock</div>
-    <div><kbd>Enter</kbd> talk · <kbd>?</kbd> toggle help</div>
+    <div><kbd>H</kbd> listen (oír al robot) · <kbd>Enter</kbd> talk · <kbd>?</kbd> toggle help</div>
   </div>
 
   <!-- settings -->
@@ -194,7 +195,7 @@ async function connect(){
 }
 // ---- video: WebRTC (low latency) with MJPEG fallback ----
 let videoMode = localStorage.ebo_vmode || 'auto';   // 'auto' (try WebRTC) | 'mjpeg'
-let pc=null, rtcWatch=null;
+let pc=null, rtcWatch=null, hearing=false;   // hearing = play the robot's mic (needs WebRTC + a user gesture to unmute)
 // the big status pill: kind = 'rtc' (green) | 'mjpeg' (amber) | 'wait' (grey)
 function vstat(kind, main, sub){ $('#vstat').className='hud '+kind;
   $('#vstatT').textContent=main; $('#vstatS').textContent = sub?('· '+sub):''; }
@@ -221,7 +222,7 @@ async function startWebRTC(){
   pc = new RTCPeerConnection({iceServers:[]});
   pc.addTransceiver('video',{direction:'recvonly'});
   pc.addTransceiver('audio',{direction:'recvonly'});
-  pc.ontrack = e => { const r=$('#rtc'); r.srcObject=e.streams[0]; r.muted=true; r.hidden=false; $('#novid').style.display='none';
+  pc.ontrack = e => { const r=$('#rtc'); r.srcObject=e.streams[0]; r.muted=!hearing; r.hidden=false; $('#novid').style.display='none';
     r.play?.().catch(()=>{}); };
   pc.onconnectionstatechange = () => {
     if(!pc) return;
@@ -327,7 +328,8 @@ addEventListener('keydown', e=>{
   const k=e.key.toLowerCase();
   if(k==='l'){ toggle('laser'); } else if(k==='n'){ cycleNight(); }
   else if(k==='c'){ toggle('camera'); } else if(k==='m'){ toggle('listen'); }
-  else if(k==='k'){ cmd('dock'); toast('docking'); } else if(k==='?'){ $('#help').classList.toggle('show'); }
+  else if(k==='k'){ cmd('dock'); toast('docking'); } else if(k==='h'){ toggleHear(); }
+  else if(k==='?'){ $('#help').classList.toggle('show'); }
 });
 addEventListener('keyup', e=>{ const dir=KEYMAP[e.key]; if(dir) down.delete(dir); });
 addEventListener('blur', ()=>{ down.clear(); });
@@ -344,6 +346,24 @@ $('#spdUp').onclick=()=>setSpeed(speed+5); $('#spdDn').onclick=()=>setSpeed(spee
 $('#volUp').onclick=()=>bumpVol(+5); $('#volDn').onclick=()=>bumpVol(-5);
 $('#laser').onclick=()=>toggle('laser'); $('#night').onclick=cycleNight;
 $('#cam').onclick=()=>toggle('camera'); $('#mic').onclick=()=>toggle('listen');
+// Listen to the robot's mic. Three things are needed: the robot capturing (listen=true), the WebRTC
+// transport (MJPEG carries no audio), and unmuting the <video> — which browsers only allow from a
+// user gesture (this click), which is why audio can't just autoplay.
+$('#hear').onclick = toggleHear;
+async function toggleHear(){
+  hearing = !hearing; mark('#hear', hearing);
+  const r=$('#rtc');
+  if(hearing){
+    if(lastState.listen!=='true') patch({listen:true}).catch(()=>{});          // robot streams its mic
+    if(!pc || pc.connectionState!=='connected'){                                // audio rides WebRTC only
+      toast('audio: conectando WebRTC…'); try{ await startWebRTC(); }catch(_){ startMjpeg('WebRTC falló'); }
+    }
+    r.muted=false; r.volume=1; try{ await r.play(); }catch(_){}
+    toast(pc ? 'escuchando 🔊' : 'audio necesita WebRTC (MJPEG no lleva sonido)');
+  } else {
+    r.muted=true; toast('audio silenciado');
+  }
+}
 $('#wakeBtn').onclick=()=>{cmd('wake');startVideo();lastTele=Date.now();toast('waking')};
 // doze watchdog: the SE 2 naps hard — when telemetry stops arriving the session is stale and video
 // freezes. Detect the gap, wake the robot and reconnect the video automatically.

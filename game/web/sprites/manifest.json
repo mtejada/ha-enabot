@@ -1,0 +1,244 @@
+{
+ "tile": 32,
+ "frames": 3,
+ "fps": 3,
+ "baseline": 31,
+ "layout": "horizontal strip per archetype: frame i is the tile at sx = i*tile, sy = 0, tile x tile px. Draw with ctx.imageSmoothingEnabled = false; feet touch y = baseline.",
+ "frame_notes": [
+  "idle",
+  "bob (upper body 1px lower)",
+  "idle + blink"
+ ],
+ "archetypes": {
+  "villager_a": {
+   "sheet": "villager_a.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "villager_b": {
+   "sheet": "villager_b.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "villager_c": {
+   "sheet": "villager_c.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "sleepy": {
+   "sheet": "sleepy.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "lass": {
+   "sheet": "lass.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "dress"
+  },
+  "granny": {
+   "sheet": "granny.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "dress"
+  },
+  "chef": {
+   "sheet": "chef.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "round"
+  },
+  "barkeep": {
+   "sheet": "barkeep.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "round"
+  },
+  "gamer": {
+   "sheet": "gamer.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "kid"
+  },
+  "robot": {
+   "sheet": "robot.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "robot"
+  },
+  "scholar": {
+   "sheet": "scholar.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "merchant": {
+   "sheet": "merchant.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "hiker": {
+   "sheet": "hiker.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "janitor": {
+   "sheet": "janitor.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "gardener": {
+   "sheet": "gardener.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "round"
+  },
+  "bather": {
+   "sheet": "bather.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "dress"
+  },
+  "wizard": {
+   "sheet": "wizard.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "dress"
+  },
+  "musician": {
+   "sheet": "musician.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "normal"
+  },
+  "kid_a": {
+   "sheet": "kid_a.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "kid"
+  },
+  "kid_b": {
+   "sheet": "kid_b.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "kid"
+  },
+  "teddy": {
+   "sheet": "teddy.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "round"
+  },
+  "cat": {
+   "sheet": "cat.png",
+   "frames": 3,
+   "width": 96,
+   "height": 32,
+   "body": "kid"
+  }
+ },
+ "labels": {
+  "_default": "villager_a",
+  "backpack": "hiker",
+  "ball": "kid_a",
+  "basket": "janitor",
+  "bed": "sleepy",
+  "blanket": "sleepy",
+  "book": "scholar",
+  "bottle": "barkeep",
+  "bowl": "granny",
+  "box": "kid_a",
+  "broom": "janitor",
+  "bucket": "janitor",
+  "cable": "robot",
+  "can": "barkeep",
+  "candle": "wizard",
+  "cat tree": "cat",
+  "cell phone": "gamer",
+  "chair": "villager_a",
+  "charger": "robot",
+  "clock": "scholar",
+  "couch": "villager_c",
+  "cup": "barkeep",
+  "curtain": "lass",
+  "dining table": "granny",
+  "doll": "lass",
+  "door": "villager_a",
+  "fan": "robot",
+  "food bowl": "cat",
+  "glasses": "scholar",
+  "guitar": "musician",
+  "handbag": "hiker",
+  "hat": "hiker",
+  "headphones": "musician",
+  "jar": "granny",
+  "key": "wizard",
+  "keyboard": "gamer",
+  "lamp": "scholar",
+  "laptop": "gamer",
+  "leash": "cat",
+  "litter box": "cat",
+  "microwave": "chef",
+  "mirror": "lass",
+  "monitor": "gamer",
+  "oven": "chef",
+  "pan": "chef",
+  "pillow": "sleepy",
+  "plant": "gardener",
+  "plate": "granny",
+  "potted plant": "gardener",
+  "refrigerator": "chef",
+  "remote": "gamer",
+  "rug": "villager_b",
+  "scissors": "granny",
+  "shoe": "hiker",
+  "sink": "bather",
+  "slipper": "sleepy",
+  "sock": "hiker",
+  "speaker": "musician",
+  "suitcase": "hiker",
+  "tablet": "gamer",
+  "teddy bear": "teddy",
+  "toaster": "chef",
+  "toilet": "bather",
+  "toothbrush": "bather",
+  "towel": "bather",
+  "toy": "kid_b",
+  "trash can": "janitor",
+  "tv": "gamer",
+  "umbrella": "hiker",
+  "vase": "lass",
+  "wallet": "merchant",
+  "watch": "merchant",
+  "window": "villager_a",
+  "wine glass": "barkeep"
+ }
+}

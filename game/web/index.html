@@ -72,6 +72,26 @@ const video=$('#video'), fx=$('#fx'), ctx=fx.getContext('2d');
 let ws=null, latest={frame:{detections:[],source_w:0,source_h:0}, entities:[]}, entMap={};
 let dmgFx=[];   // floating damage numbers
 
+// ---- NPC sprite sheets (GBA-style, front-facing pixel characters) ----
+// Each "house" object gets a character standing on it; archetype picked from the label.
+const SPR={ manifest:null, imgs:{}, ready:false };
+const SPR_BASE=(location.pathname.replace(/\/?$/,'')||'/game')+'/sprites/';
+(async function loadSprites(){
+  try{
+    const m=await (await fetch(SPR_BASE+'manifest.json')).json(); SPR.manifest=m;
+    await Promise.all(Object.entries(m.archetypes).map(([name,a])=>new Promise(res=>{
+      const im=new Image(); im.onload=()=>{SPR.imgs[name]=im;res();}; im.onerror=()=>res(); im.src=SPR_BASE+a.sheet; })));
+    SPR.ready=true;
+  }catch(_){ /* leave emoji fallback */ }
+})();
+function archetypeFor(label){
+  const m=SPR.manifest; if(!m) return null; const l=(label||'').toLowerCase(); const L=m.labels||{};
+  if(L[l]) return L[l];
+  for(const key in L){ if(key!=='_default' && l.includes(key)) return L[key]; }
+  return L._default||'villager_a';
+}
+function hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h=(h^s.charCodeAt(i))*16777619>>>0; } return h; }
+
 function resize(){ fx.width=innerWidth; fx.height=innerHeight; }
 addEventListener('resize',resize); resize();
 
@@ -232,18 +252,36 @@ function drawBoss(x,y,w,h,cx,cy,k,e,d){
 }
 
 function drawNpc(x,y,w,h,cx,cy,k,e,d){
-  // little house glyph at the object + name; a dialog when the robot is "close" (big/near)
+  const m=SPR.manifest, arch=archetypeFor(d.label), img=arch&&SPR.imgs[arch];
+  const nm=(e&&e.name)||d.label;
+  const near = (d.depth!=null? d.depth<0.4 : (w*h)/(fx.width*fx.height) > 0.03);
+  if(m && img){
+    const tile=m.tile, frames=m.frames||3, fps=m.fps||3;
+    const seed=hashStr(d.entity_id||d.label||'x'), phase=(seed%frames);   // desync the animation per NPC
+    const fi=(Math.floor(performance.now()/1000*fps)+phase)%frames, sx=fi*tile;
+    // character stands ON the object: fit its box, clamp for visibility, feet at the box bottom
+    const S=Math.max(46, Math.min(h*1.15, 150)), dx=cx-S/2, feet=y+h, dy=feet-S;
+    ctx.fillStyle='rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(cx, feet-2, S*0.32, S*0.10, 0, 0, 7); ctx.fill();
+    const sm=ctx.imageSmoothingEnabled; ctx.imageSmoothingEnabled=false;
+    ctx.drawImage(img, sx,0,tile,tile, dx,dy,S,S);
+    ctx.imageSmoothingEnabled=sm;
+    ctx.font=`${Math.round(11*k)}px system-ui`; ctx.textAlign='center';
+    const tw=ctx.measureText(nm).width+12;
+    ctx.fillStyle='rgba(0,0,0,.6)'; roundRect(cx-tw/2, dy-19*k, tw, 16*k, 6); ctx.fill();
+    ctx.fillStyle='#cfe'; ctx.fillText(nm, cx, dy-7*k);
+    if(near){ const line=(e&&e.attributes&&e.attributes.dialog) || `¡Hola! Bienvenido a la casa de ${nm}.`;
+      bubble(cx, dy-24*k, line, k); }
+    return;
+  }
+  // fallback: emoji house glyph until the sprite sheets finish loading
   ctx.font=`${Math.round(26*k)}px serif`; ctx.textAlign='center';
   ctx.fillText('🏠', cx, y-6*k);
   ctx.font=`${Math.round(11*k)}px system-ui`; ctx.fillStyle='rgba(0,0,0,.6)';
-  const nm=(e&&e.name)|| d.label, tw=ctx.measureText(nm).width+12;
+  const tw=ctx.measureText(nm).width+12;
   roundRect(cx-tw/2, y+2, tw, 16*k, 6); ctx.fill();
   ctx.fillStyle='#cfe'; ctx.fillText(nm, cx, y+13*k);
-  const near = (d.depth!=null? d.depth<0.4 : (w*h)/(fx.width*fx.height) > 0.03);
-  if(near){
-    const line=(e&&e.attributes&&e.attributes.dialog) || `¡Hola! Bienvenido a la casa de ${nm}.`;
-    bubble(cx, y-40*k, line, k);
-  }
+  if(near){ const line=(e&&e.attributes&&e.attributes.dialog) || `¡Hola! Bienvenido a la casa de ${nm}.`;
+    bubble(cx, y-40*k, line, k); }
 }
 
 // ---- helpers ----

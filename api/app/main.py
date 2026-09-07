@@ -71,11 +71,23 @@ async def sandbox():
     return FileResponse(_STATIC / "sandbox.html")
 
 
+_GAME_WEB = Path("/app/game_web")
+
+
 @app.get("/game", include_in_schema=False)
 async def game_index():
-    p = Path("/app/game_web/index.html")
+    p = _GAME_WEB / "index.html"
     if not p.exists():
         return RedirectResponse("/sandbox")
+    return FileResponse(p)
+
+
+@app.get("/game/{asset:path}", include_in_schema=False)
+async def game_asset(asset: str):
+    # serve the game frontend's static assets (sprite sheets, manifest, …) with a traversal guard
+    p = (_GAME_WEB / asset).resolve()
+    if _GAME_WEB not in p.parents or not p.is_file():
+        return RedirectResponse("/game")
     return FileResponse(p)
 
 

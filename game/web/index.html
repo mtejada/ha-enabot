@@ -35,9 +35,9 @@
   #cfgbox h2{margin:0 0 10px} #cfgbox label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px}
   #cfgbox input{width:100%;background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:9px 11px;color:var(--fg)}
   #cfgbox .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
-  #legend{bottom:12px;left:12px;color:var(--mut);font-size:12px;max-width:340px}
+  #legend{bottom:64px;left:12px;color:var(--mut);font-size:12px;max-width:340px}
   #legend b{color:var(--fg)}
-  #count{bottom:12px;right:12px;font-size:12px}
+  #count{bottom:64px;right:12px;font-size:12px}
 </style>
 </head>
 <body>
@@ -76,9 +76,26 @@ function resize(){ fx.width=innerWidth; fx.height=innerHeight; }
 addEventListener('resize',resize); resize();
 
 // ---- connect ----
-function connect(){
+async function wakeRobot(){
+  try{
+    await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/wake`,{method:'POST',headers:{Authorization:'Bearer '+cfg.key}});
+    await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/settings`,{method:'PATCH',
+      headers:{Authorization:'Bearer '+cfg.key,'Content-Type':'application/json'},body:'{"camera":true}'});
+  }catch(_){}
+}
+async function connect(){
   if(!cfg.key){ openCfg(); return; }
-  startVideo(); openWs(); $('#conn').textContent='conectando…';
+  $('#conn').textContent='despertando robot…';
+  await wakeRobot();
+  // esperar a que el stream esté REALMENTE arriba (snapshot 200) antes de negociar WebRTC/WHEP
+  for(let i=0;i<10;i++){
+    try{ const r=await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/snapshot?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`); if(r.ok) break; }catch(_){}
+    $('#conn').textContent=`esperando video… ${i+1}`; await new Promise(r=>setTimeout(r,1000));
+  }
+  startVideo(); openWs(); $('#conn').textContent='conectado';
+  clearInterval(window._ka);
+  window._ka=setInterval(()=>{ fetch(`${cfg.base}/api/v1/robots/${cfg.id}/settings`,{method:'PATCH',
+    headers:{Authorization:'Bearer '+cfg.key,'Content-Type':'application/json'},body:'{"camera":true}'}).catch(()=>{}); }, 20000);
 }
 
 // ---- video: WebRTC (baja latencia) con fallback a MJPEG + indicador ----
@@ -171,7 +188,7 @@ function draw(){
 // Doom-style status bar along the bottom of the video — covers the EBO watermark + timestamp.
 // Hidden in debug mode (draw() returns before this when debug is on).
 function drawDoomHud(R, bosses, npcs){
-  const bh=Math.max(30, R.h*0.065), y=R.y+R.h-bh, x=R.x, w=R.w;
+  const bh=Math.max(44, R.h*0.095), y=R.y+R.h-bh, x=R.x, w=R.w;
   const g=ctx.createLinearGradient(0,y,0,y+bh);
   g.addColorStop(0,'#4a3b2f'); g.addColorStop(.14,'#7a5f49'); g.addColorStop(.5,'#4f4033'); g.addColorStop(1,'#211913');
   ctx.fillStyle=g; ctx.fillRect(x,y,w,bh);

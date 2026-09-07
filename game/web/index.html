@@ -11,7 +11,10 @@
   html,body{margin:0;height:100%;background:#000;color:var(--fg);overflow:hidden;user-select:none;
     font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif}
   #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-  #video,#rtc{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#000}
+  /* fill the stage and letterbox INSIDE via object-fit:contain, so the rendered video rect matches
+     videoRect() exactly at any window size. (max-width/height:100% would leave a small video at its
+     native size in a large window while the overlay assumed it filled → boxes drawn off the video.) */
+  #video,#rtc{width:100%;height:100%;object-fit:contain;display:block;background:#000}
   #vstat{top:12px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:8px;align-items:center;
     font-weight:600;font-size:12px;cursor:pointer}
   #vstat .vdot{width:9px;height:9px;border-radius:50%;background:var(--mut)}
@@ -172,12 +175,18 @@ function openWs(){
 }
 
 // ---- geometry: map the video's letterboxed rect inside the stage ----
+// MEASURE the real element box (getBoundingClientRect) and place the object-fit:contain media inside
+// it — don't assume the element fills the window. With max/native sizing or grid centering the box can
+// be smaller/offset from the viewport, which drew the overlay off the video.
 function videoRect(){
   const rtc=$('#rtc'), useRtc=rtc && !rtc.hidden && rtc.videoWidth;
+  const el=useRtc?rtc:video;
   const vw=useRtc?rtc.videoWidth:(video.naturalWidth||latest.frame.source_w||16);
   const vh=useRtc?rtc.videoHeight:(video.naturalHeight||latest.frame.source_h||9);
-  const cw=innerWidth, ch=innerHeight, s=Math.min(cw/vw, ch/vh);
-  const w=vw*s, h=vh*s; return {x:(cw-w)/2, y:(ch-h)/2, w, h};
+  const bb=el.getBoundingClientRect();
+  if(!bb.width||!bb.height||!vw||!vh) return {x:0,y:0,w:innerWidth,h:innerHeight};
+  const s=Math.min(bb.width/vw, bb.height/vh), w=vw*s, h=vh*s;
+  return {x:bb.x+(bb.width-w)/2, y:bb.y+(bb.height-h)/2, w, h};
 }
 // depth 0=near .. 1=far  → a scale multiplier for overlay art (near feels bigger/closer)
 const depthScale=d=> d==null ? 1 : (1.35 - 0.8*Math.max(0,Math.min(1,d)));
@@ -210,16 +219,19 @@ function draw(){
              requestAnimationFrame(draw); return; }
   // far → near so nearer bosses draw on top (depth ordering)
   const order=[...dets].sort((a,b)=>(b.depth??0.5)-(a.depth??0.5));
+  // count roles first, draw the Doom bar UNDER the sprites (covers the video watermark) so the
+  // bosses/NPCs render ON TOP of the bar instead of being hidden behind it.
   let bosses=0, npcs=0;
+  for(const d of order){ if((d.role||'')==='boss') bosses++; else npcs++; }
+  drawDoomHud(R, bosses, npcs);
   for(const d of order){
     const e=d.entity_id&&entMap[d.entity_id]; const [nx,ny,nw,nh]=d.bbox;
     const x=R.x+nx*R.w, y=R.y+ny*R.h, w=nw*R.w, h=nh*R.h, cx=x+w/2, cy=y+h/2;
     const k=depthScale(d.depth);
-    if((d.role||'')==='boss'){ bosses++; drawBoss(x,y,w,h,cx,cy,k,e,d); }
-    else { npcs++; drawNpc(x,y,w,h,cx,cy,k,e,d); }
+    if((d.role||'')==='boss'){ drawBoss(x,y,w,h,cx,cy,k,e,d); }
+    else { drawNpc(x,y,w,h,cx,cy,k,e,d); }
   }
   drawDamage();
-  drawDoomHud(R, bosses, npcs);
   $('#count').textContent=`bosses: ${bosses} · npcs: ${npcs}`;
   requestAnimationFrame(draw);
 }
@@ -227,7 +239,7 @@ function draw(){
 // Doom-style status bar along the bottom of the video — covers the EBO watermark + timestamp.
 // Hidden in debug mode (draw() returns before this when debug is on).
 function drawDoomHud(R, bosses, npcs){
-  const bh=Math.max(44, R.h*0.095), y=R.y+R.h-bh, x=R.x, w=R.w;
+  const bh=Math.max(54, R.h*0.12), y=R.y+R.h-bh, x=R.x, w=R.w;
   const g=ctx.createLinearGradient(0,y,0,y+bh);
   g.addColorStop(0,'#4a3b2f'); g.addColorStop(.14,'#7a5f49'); g.addColorStop(.5,'#4f4033'); g.addColorStop(1,'#211913');
   ctx.fillStyle=g; ctx.fillRect(x,y,w,bh);

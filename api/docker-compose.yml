@@ -71,7 +71,11 @@ services:
       FPS: ${VISION_FPS:-6}
       ENABLE_REID: ${VISION_REID:-true}
       DETECT_ALL: ${VISION_DETECT_ALL:-false}   # prompt-free: detect everything
-      PROPS: ${VISION_PROPS:-shoe,slipper,backpack,handbag,bottle,cup,book,ball,potted plant,remote}
+      PROPS: ${VISION_PROPS:-shoe,sneaker,bottle,cup,book,ball,potted plant,teddy bear,laptop,tv,chair,couch,vase,clock,remote,keyboard,lamp,pillow,bowl}
+      IMGSZ: ${VISION_IMGSZ:-768}
+      CONF: ${VISION_CONF:-0.25}
+      MIN_TRACK_HITS: ${VISION_MIN_TRACK_HITS:-3}
+      MAX_DET_AREA: ${VISION_MAX_DET_AREA:-0.55}
     volumes:
       - vision_weights:/weights                  # persist auto-downloaded model weights
 

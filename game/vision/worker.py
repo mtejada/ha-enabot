@@ -35,9 +35,15 @@ ROBOT_ID      = os.environ.get("ROBOT_ID", "ebo")
 # rtsp = read the engine's RTSP directly (lower latency but cv2/ffmpeg can choke on the H.264).
 VIDEO_SOURCE  = os.environ.get("VIDEO_SOURCE", "mjpeg").lower()
 FPS           = float(os.environ.get("FPS", "6"))
-IMGSZ         = int(os.environ.get("IMGSZ", "640"))
+IMGSZ         = int(os.environ.get("IMGSZ", "768"))   # 768 recognises small/odd-angle objects better than 640
 DEPTH_IMGSZ   = int(os.environ.get("DEPTH_IMGSZ", "512"))
-CONF          = float(os.environ.get("CONF", "0.35"))
+CONF          = float(os.environ.get("CONF", "0.25")) # open-vocab real objects sit low; track-gating filters junk
+# Quality gates (open-vocab on a low fisheye cam is noisy): require a detection to persist across a
+# few tracker frames before we trust it, and drop absurdly large boxes (the model loves to paint one
+# giant wrong box over half the frame).
+MIN_TRACK_HITS = int(os.environ.get("MIN_TRACK_HITS", "3"))   # frames a track must survive before emitting
+MAX_DET_AREA   = float(os.environ.get("MAX_DET_AREA", "0.55"))  # skip boxes bigger than this fraction of frame
+CONF_NO_TRACK  = float(os.environ.get("CONF_NO_TRACK", "0.45")) # untracked det must clear a higher bar
 DEPTH_MAX_M   = float(os.environ.get("DEPTH_MAX_M", "4.0"))     # metres mapped to depth=1.0 (far)
 ENABLE_REID   = os.environ.get("ENABLE_REID", "true").lower() in ("1", "true", "yes")
 DETECT_ALL    = os.environ.get("DETECT_ALL", "false").lower() in ("1", "true", "yes")  # prompt-free: detect everything
@@ -45,8 +51,12 @@ MASK_POINTS   = int(os.environ.get("MASK_POINTS", "24"))        # polygon points
 CAMERA_KEEPALIVE = float(os.environ.get("CAMERA_KEEPALIVE", "25"))  # secs; re-assert wake+camera
 # animals become bosses; everything else in the prompt list becomes an NPC house / prop.
 ANIMALS = ["cat", "dog", "bird", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe"]
+# Curated, deliberately SMALL prompt set. Open-vocab YOLOE degrades with long/overlapping lists —
+# e.g. "handbag"/"backpack" steal every shoe, "wine glass" steals every cup. Keep game-relevant,
+# visually-distinct classes only. (Fewer, cleaner prompts >> a 90-class kitchen sink.)
 PROPS   = [p.strip() for p in os.environ.get(
-    "PROPS", "shoe,slipper,backpack,handbag,bottle,cup,book,ball,potted plant,remote").split(",") if p.strip()]
+    "PROPS", "shoe,sneaker,bottle,cup,book,ball,potted plant,teddy bear,laptop,tv,"
+             "chair,couch,vase,clock,remote,keyboard,lamp,pillow,bowl").split(",") if p.strip()]
 PROMPTS = ANIMALS + PROPS
 
 S = requests.Session()
@@ -148,6 +158,7 @@ def real_loop():
     last_ka = 0.0
     period = 1.0 / FPS
     hb_n, hb_t = 0, time.time()
+    track_hits: dict[int, int] = {}   # track_id -> consecutive frames seen (persistence gate)
     while True:
         t0 = time.time()
         if t0 - last_ka > CAMERA_KEEPALIVE:
@@ -180,9 +191,24 @@ def real_loop():
             polys = r.masks.xy if r.masks is not None else [None] * len(clss)     # px polygons
             mdata = r.masks.data.cpu().numpy() if r.masks is not None else None    # (N,mh,mw)
 
+            seen_ids = set()
             for i in range(len(clss)):
                 x1, y1, x2, y2 = xyxy[i]
                 label = names[clss[i]]
+                nw, nh = float(x2 - x1) / W, float(y2 - y1) / H
+                # drop absurdly large boxes (the model's favourite hallucination)
+                if nw * nh > MAX_DET_AREA:
+                    continue
+                # persistence gate: a tracked object must survive a few frames; an untracked one must
+                # clear a higher confidence bar. Kills the one-frame junk that spawns bogus entities.
+                tid = ids[i]
+                if tid is not None:
+                    track_hits[tid] = track_hits.get(tid, 0) + 1
+                    seen_ids.add(tid)
+                    if track_hits[tid] < MIN_TRACK_HITS:
+                        continue
+                elif float(confs[i]) < CONF_NO_TRACK:
+                    continue
                 mask_full = None
                 if mdata is not None and i < len(mdata):
                     mask_full = cv2.resize((mdata[i] > 0.5).astype(np.uint8), (W, H)) > 0
@@ -205,6 +231,10 @@ def real_loop():
                         except Exception as e:
                             log("embed error:", e)
                 dets.append(d)
+            # forget tracks that vanished this frame → bounds memory and resets persistence for
+            # a truly-gone object (BoT-SORT keeps ids stable across short occlusions, so this only
+            # drops ids the tracker itself dropped).
+            track_hits = {t: track_hits[t] for t in seen_ids}
 
         post_detections({"ts": time.time(), "source_w": W, "source_h": H, "detections": dets})
         hb_n += 1

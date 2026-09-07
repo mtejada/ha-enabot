@@ -210,6 +210,7 @@ class Bridge:
         self._last_rx = time.time()         # last message received FROM the robot (liveness)
         self._last_reconnect = 0.0          # last auto-reconnect (rate-limit)
         self._reconnect_tries = 0           # 0 = fresh; 1 = rejoined once, escalate to restart next
+        self._drive_dock_since = 0.0        # when the user started driving while still on the charger
         self._route_rec = False          # True while recording a route (teach-by-driving)
         self._route_pending = None       # RouteDataInfo from 103206, awaiting a name + save
         # Route/patrol support is model-dependent: the EBO Air 2 firmware ignores these opcodes (the
@@ -1208,7 +1209,7 @@ class Bridge:
                         sys.stdout.flush(); sys.stderr.flush()
                     except Exception:
                         pass
-                    os._exit(1)
+                    os._exit(0)
                 self._reconnect_tries = 1
                 log("[reconnect] robot silent %.0fs during active control — full reconnect (fresh session)"
                     % (now - self._last_rx))
@@ -1227,6 +1228,27 @@ class Bridge:
                     self.vec_deadline = 0.0
                 v = dict(self.vec)
                 moving = any(v[k] for k in ("lx", "ly", "rx", "ry"))
+            # Undock watchdog: if you're actively driving but the robot is STILL on the charger, a
+            # live session isn't enough — a deeply-docked robot only leaves after a full init (its
+            # telemetry keeps flowing, so the silence watchdog above never fires). Restart the bridge;
+            # run.sh relaunches it with a fresh handshake, and the continued drive then takes it off.
+            tb = (self.telemetry or {}).get("battery", {})
+            on_charger = isinstance(tb, dict) and (tb.get("adapterStatus", -1) != -1
+                                                   or bool(tb.get("chargeStatus")))
+            if moving and on_charger:
+                if not self._drive_dock_since:
+                    self._drive_dock_since = now
+                elif now - self._drive_dock_since > 8 and now - self._last_reconnect >= 20:
+                    self._last_reconnect = now
+                    log("[undock] driving but still on the charger — restarting for a fresh session "
+                        "so it can leave the dock")
+                    try:
+                        sys.stdout.flush(); sys.stderr.flush()
+                    except Exception:
+                        pass
+                    os._exit(0)
+            else:
+                self._drive_dock_since = 0.0
             if moving:
                 self.send(OP_MOVE, v)          # stream the vector at 10 Hz
                 was_moving = True

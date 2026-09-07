@@ -252,8 +252,8 @@ run_robot() {
       echo "[add-on] robot ${id:-single} crashed ${crashes}× with A/V — control only."
       v=0; a=0; crashes=0
     fi
-    echo "[add-on] bridge (${id:-single}) exited (rc=${rc}), restarting in 15s…"
-    sleep 15 & wait $! || true
+    echo "[add-on] bridge (${id:-single}) exited (rc=${rc}), restarting…"
+    if [ "$rc" -eq 0 ]; then sleep 2 & wait $! || true; else sleep 15 & wait $! || true; fi
   done
 }
 

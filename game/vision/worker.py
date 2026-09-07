@@ -62,9 +62,10 @@ def post_detections(payload: dict) -> None:
 
 
 def camera_keepalive() -> None:
-    """Make sure the engine is streaming (camera on) so RTSP has frames."""
+    """Keep RTSP alive by re-asserting camera-on. This is a no-op when the robot is already
+    streaming (so it won't blip video or trip the drive watchdogs) and gently wakes it when not.
+    Deliberately does NOT send `wake` — that forces an RTC rejoin and fights the driving watchdogs."""
     try:
-        S.post(f"{API_URL}/api/v1/robots/{ROBOT_ID}/wake", timeout=8)
         S.patch(f"{API_URL}/api/v1/robots/{ROBOT_ID}/settings", json={"camera": True}, timeout=8)
     except requests.RequestException as e:
         log("keepalive failed:", e)

@@ -208,6 +208,7 @@ class Bridge:
             self.settings["imageStyle"] = self._ui["imageStyle"]
         self._last_activity = time.time()   # last user command (drives auto-standby)
         self._last_rx = time.time()         # last message received FROM the robot (liveness)
+        self._last_move = 0.0               # last MOVE command (drives the reconnect/undock watchdogs)
         self._last_reconnect = 0.0          # last auto-reconnect (rate-limit)
         self._reconnect_tries = 0           # 0 = fresh; 1 = rejoined once, escalate to restart next
         self._drive_dock_since = 0.0        # when the user started driving while still on the charger
@@ -1195,7 +1196,7 @@ class Bridge:
             # reuses that dead session, so the robot stays deaf — only a FRESH cloud session revives
             # it. Force a full reconnect. Gated on recent user activity so an idle robot may still
             # doze; rate-limited so it can't thrash.
-            active = now - getattr(self, "_last_activity", 0) < 25
+            active = now - self._last_move < 25          # only while you're actually DRIVING
             silent = now - self._last_rx > 12
             if self.connected and active and silent and now - self._last_reconnect >= 20:
                 self._last_reconnect = now
@@ -1263,6 +1264,8 @@ class Bridge:
         with self.lock:
             self.vec = {"lx": lx, "ly": ly, "rx": rx, "ry": ry, "buttons": int(buttons)}
             self.vec_deadline = time.time() + hold if any((lx, ly, rx, ry)) else 0
+            if any((lx, ly, rx, ry)):
+                self._last_move = time.time()   # only DRIVING arms the reconnect/undock watchdogs
 
     def _set_motion(self, field, value):
         """Change one MotionSettings field and re-send the WHOLE object (opcode 103023) — the robot

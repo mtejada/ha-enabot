@@ -73,6 +73,7 @@ services:
       PROPS: ${VISION_PROPS:-shoe,slipper,backpack,handbag,bottle,cup,book,ball,potted plant,remote}
     volumes:
       - vision_weights:/weights                  # persist auto-downloaded model weights
+      - ../game/vision/worker.py:/app/worker.py:ro   # live-edit the worker without rebuilding
 
 volumes:
   engine_data:

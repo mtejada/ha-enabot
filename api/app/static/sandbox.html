@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>EBO SE 2 — Cockpit</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:rgba(16,20,28,.72); --panel2:rgba(28,34,46,.85);
+    --line:rgba(255,255,255,.10); --fg:#e8edf4; --mut:#8b97a8; --acc:#3ea6ff;
+    --ok:#39d98a; --warn:#ffb020; --bad:#ff5470; --shadow:0 6px 24px rgba(0,0,0,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+    font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden;user-select:none}
+  #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
+  #video{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  #novid{position:absolute;color:var(--mut);text-align:center;font-size:13px}
+  .hud{position:fixed;z-index:5;background:var(--panel);backdrop-filter:blur(8px);
+    border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+  /* top-left telemetry */
+  #tele{top:12px;left:12px;padding:10px 12px;display:flex;gap:14px;align-items:center;min-width:0}
+  .stat{display:flex;flex-direction:column;line-height:1.15}
+  .stat b{font-size:15px} .stat span{color:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--bad);display:inline-block;margin-right:6px}
+  .dot.on{background:var(--ok)} .dot.warn{background:var(--warn)}
+  /* top-right */
+  #topr{top:12px;right:12px;padding:8px;display:flex;gap:6px}
+  button,select,input{font:inherit;color:var(--fg)}
+  .btn{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;
+    cursor:pointer;transition:.12s;white-space:nowrap}
+  .btn:hover{border-color:var(--acc)} .btn.act{background:var(--acc);border-color:var(--acc);color:#04121f;font-weight:600}
+  .btn small{opacity:.6;font-size:10px;margin-left:4px}
+  /* bottom dock */
+  #dock{left:50%;transform:translateX(-50%);bottom:12px;padding:12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px)}
+  .group{display:flex;gap:8px;align-items:center;padding-right:14px;border-right:1px solid var(--line)}
+  .group:last-child{border:0;padding-right:0}
+  .glabel{color:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-right:2px}
+  /* dpad */
+  .dpad{display:grid;grid-template-columns:repeat(3,40px);grid-template-rows:repeat(3,40px);gap:5px}
+  .dpad .btn{padding:0;display:grid;place-items:center;font-size:17px}
+  .dpad .sp{visibility:hidden}
+  .meter{min-width:52px;text-align:center}
+  .meter b{font-size:18px}
+  input[type=text]{background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:200px}
+  input[type=text]:focus{outline:none;border-color:var(--acc)}
+  /* settings modal */
+  #ov{position:fixed;inset:0;z-index:20;background:rgba(0,0,0,.6);display:none;place-items:center}
+  #ov.show{display:grid}
+  #cfg{background:#11151d;border:1px solid var(--line);border-radius:14px;padding:20px;width:min(460px,92vw);box-shadow:var(--shadow)}
+  #cfg h2{margin:0 0 4px} #cfg p{color:var(--mut);margin:0 0 16px;font-size:13px}
+  #cfg label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px}
+  #cfg input{width:100%;background:#0d1117;border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+  #cfg .row{display:flex;gap:8px;margin-top:18px;justify-content:flex-end}
+  /* help */
+  #help{right:12px;bottom:12px;max-width:300px;padding:12px 14px;font-size:12px;color:var(--mut);display:none}
+  #help.show{display:block} #help kbd{background:#0d1117;border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--fg);font-family:ui-monospace,monospace;font-size:11px}
+  #help div{margin:3px 0}
+  .toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:30;background:var(--panel2);
+    border:1px solid var(--line);border-radius:9px;padding:8px 14px;box-shadow:var(--shadow);opacity:0;transition:.2s;pointer-events:none}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+  <div id="stage">
+    <img id="video" alt="" hidden>
+    <div id="novid">no video — press <b>Connect</b> (top-right). Camera turns on automatically.</div>
+  </div>
+
+  <!-- telemetry HUD -->
+  <div id="tele" class="hud">
+    <div class="stat"><b><span id="conn" class="dot"></span><span id="name">—</span></b><span>robot</span></div>
+    <div class="stat"><b id="batt">—</b><span>battery</span></div>
+    <div class="stat"><b id="wifi">—</b><span>wifi</span></div>
+    <div class="stat"><b id="task">—</b><span>task</span></div>
+  </div>
+
+  <!-- top right -->
+  <div id="topr" class="hud">
+    <select id="robotSel" class="btn" title="robot"></select>
+    <button class="btn" id="connBtn">Connect</button>
+    <button class="btn" id="gear" title="Settings">⚙</button>
+    <button class="btn" id="helpBtn" title="Shortcuts">?</button>
+  </div>
+
+  <!-- bottom control dock -->
+  <div id="dock" class="hud">
+    <div class="group">
+      <div class="dpad">
+        <div class="sp"></div><button class="btn" data-drive="up">▲</button><div class="sp"></div>
+        <button class="btn" data-drive="left">◀</button>
+        <button class="btn" id="stopBtn" title="stop (space)">■</button>
+        <button class="btn" data-drive="right">▶</button>
+        <div class="sp"></div><button class="btn" data-drive="down">▼</button><div class="sp"></div>
+      </div>
+    </div>
+    <div class="group">
+      <span class="glabel">speed</span>
+      <button class="btn" id="spdDn">−</button>
+      <div class="meter"><b id="spd">25</b></div>
+      <button class="btn" id="spdUp">+</button>
+    </div>
+    <div class="group">
+      <span class="glabel">vol</span>
+      <button class="btn" id="volDn">−</button>
+      <div class="meter"><b id="vol">—</b></div>
+      <button class="btn" id="volUp">+</button>
+    </div>
+    <div class="group">
+      <button class="btn" id="laser">Laser <small>L</small></button>
+      <button class="btn" id="night">Night <small>N</small></button>
+      <button class="btn" id="cam">Cam <small>C</small></button>
+      <button class="btn" id="mic">Mic <small>M</small></button>
+    </div>
+    <div class="group">
+      <button class="btn" id="wakeBtn">Wake</button>
+      <button class="btn" id="dockBtn">Dock <small>K</small></button>
+      <button class="btn" id="sleepBtn">Sleep</button>
+      <button class="btn" id="snapBtn">Snap</button>
+    </div>
+    <div class="group">
+      <input type="text" id="tts" placeholder="Say… (Enter)" maxlength="500">
+      <select id="voice" class="btn" title="voice"></select>
+    </div>
+  </div>
+
+  <div id="help" class="hud">
+    <div><kbd>↑↓←→</kbd> / <kbd>WASD</kbd> drive · <kbd>Space</kbd> stop</div>
+    <div><kbd>1</kbd>…<kbd>9</kbd><kbd>0</kbd> speed 10–100</div>
+    <div><kbd>+</kbd> / <kbd>−</kbd> volume</div>
+    <div><kbd>L</kbd> laser · <kbd>N</kbd> night · <kbd>C</kbd> cam · <kbd>M</kbd> mic · <kbd>K</kbd> dock</div>
+    <div><kbd>Enter</kbd> talk · <kbd>?</kbd> toggle help</div>
+  </div>
+
+  <!-- settings -->
+  <div id="ov"><div id="cfg">
+    <h2>Connect</h2>
+    <p>Point at your EBO API and paste a client key.</p>
+    <label>API base URL</label><input id="cBase" placeholder="http://localhost:8080">
+    <label>API key (Bearer)</label><input id="cKey" placeholder="from API_KEYS in .env">
+    <div class="row"><button class="btn" id="cCancel">Cancel</button><button class="btn act" id="cSave">Save & Connect</button></div>
+  </div></div>
+
+  <div id="toast" class="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const cfg = {
+  base: (localStorage.ebo_base || location.origin).replace(/\/$/,''),
+  key:  localStorage.ebo_key  || '',
+  id:   localStorage.ebo_id   || '',
+};
+let ws=null, lastState={}, speed=+(localStorage.ebo_speed||25), volPending=null;
+
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400); }
+function auth(){ return { 'Authorization':'Bearer '+cfg.key }; }
+async function api(path, opts={}){
+  const r = await fetch(cfg.base+path, {...opts, headers:{...(opts.headers||{}), ...auth(),
+    ...(opts.body?{'Content-Type':'application/json'}:{})}});
+  if(!r.ok){ toast('HTTP '+r.status); throw new Error(r.status); }
+  const ct=r.headers.get('content-type')||''; return ct.includes('json')?r.json():r;
+}
+const cmd = (suffix, body)=> api(`/api/v1/robots/${cfg.id}/${suffix}`, {method:'POST', body:body?JSON.stringify(body):undefined});
+const patch = body => api(`/api/v1/robots/${cfg.id}/settings`, {method:'PATCH', body:JSON.stringify(body)});
+
+// ---- connect ----
+async function connect(){
+  if(!cfg.key || !cfg.base){ openCfg(); return; }
+  try{
+    const robots = await api('/api/v1/robots');
+    if(!robots.length){ toast('no robots'); return; }
+    const sel=$('#robotSel'); sel.innerHTML='';
+    robots.forEach(r=>{ const o=document.createElement('option'); o.value=r.id; o.textContent=(r.name||r.id)+' · '+(r.model||''); sel.appendChild(o); });
+    if(!cfg.id || !robots.find(r=>r.id===cfg.id)) cfg.id=robots[0].id;
+    sel.value=cfg.id; localStorage.ebo_id=cfg.id;
+    await cmd('wake'); await patch({camera:true});           // ensure the stream is live
+    startVideo(); openWs(); loadVoices(); pushSpeed();
+    toast('connected');
+  }catch(e){ toast('connect failed'); }
+}
+function startVideo(){
+  const v=$('#video');
+  v.src = `${cfg.base}/api/v1/robots/${cfg.id}/stream/mjpeg?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`;
+  v.hidden=false; $('#novid').style.display='none';
+  v.onerror=()=>{ $('#novid').style.display=''; setTimeout(startVideo,2000); };
+}
+function openWs(){
+  if(ws) try{ws.close()}catch(e){}
+  const u = cfg.base.replace(/^http/,'ws') + `/api/v1/robots/${cfg.id}/events?token=${encodeURIComponent(cfg.key)}`;
+  ws = new WebSocket(u);
+  ws.onmessage = m => { const d=JSON.parse(m.data); if(d.state){ lastState=d.state; renderState(d); } };
+  ws.onclose = ()=> setTimeout(()=>{ if(cfg.key) openWs(); }, 2500);
+}
+function renderState(d){
+  $('#conn').className='dot '+(d.online?'on':'');
+  $('#name').textContent = ($('#robotSel').selectedOptions[0]?.textContent||cfg.id).split(' · ')[0];
+  const s=d.state||{};
+  $('#batt').textContent = (s.battery??'—')+'%';
+  $('#wifi').textContent = (s.wifi!=null? s.wifi+' dBm':'—');
+  $('#task').textContent = s.task||(s.docked==='true'?'docked':'idle');
+  if(s.volume!=null && volPending==null){ $('#vol').textContent=s.volume; }
+  const b=$('#batt'); b.style.color = (s.battery!=null&&s.battery<20)?'var(--bad)':'';
+  mark('#laser', s.laser==='true'); mark('#cam', s.camera!=='off' && s.camera!=null?true:(s.camera==='on'));
+  mark('#mic', s.listen==='true');
+  $('#night').textContent = 'Night: '+(s.night_vision||'Auto'); $('#night').insertAdjacentHTML('beforeend',' <small>N</small>');
+}
+function mark(sel,on){ const el=$(sel); if(el) el.classList.toggle('act',!!on); }
+
+// ---- voices ----
+async function loadVoices(){
+  try{ const v=await api('/api/v1/voices'); const sel=$('#voice'); sel.innerHTML='<option value="">default voice</option>';
+    v.timbres.forEach(t=>{ const o=document.createElement('option'); o.value=t.value; o.textContent=t.name||t.value; sel.appendChild(o); });
+  }catch(e){}
+}
+
+// ---- driving ----
+const down=new Set(); let moving=false;
+const KEYMAP={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'};
+function vector(){
+  let ly=0,rx=0;
+  if(down.has('up'))ly-=1; if(down.has('down'))ly+=1; if(down.has('left'))rx-=1; if(down.has('right'))rx+=1;
+  return {ly,rx};
+}
+setInterval(()=>{
+  if(!cfg.id) return;
+  const {ly,rx}=vector();
+  if(ly||rx){ const m=Math.hypot(ly,rx)||1;
+    cmd('move',{lx:0,ly:Math.round(ly/m*speed),rx:Math.round(rx/m*speed),ry:0,hold:0.4,buttons:1}).catch(()=>{});
+    moving=true;
+  } else if(moving){ cmd('stop').catch(()=>{}); moving=false; }
+},130);
+
+function pushSpeed(){ $('#spd').textContent=speed; localStorage.ebo_speed=speed; }
+function setSpeed(v){ speed=Math.max(1,Math.min(100,v)); pushSpeed(); }
+function bumpVol(d){
+  const cur = volPending!=null?volPending : (+lastState.volume||0);
+  const nv = Math.max(0,Math.min(100,cur+d)); volPending=nv; $('#vol').textContent=nv;
+  clearTimeout(bumpVol._t); bumpVol._t=setTimeout(async()=>{ try{await patch({volume:nv});}finally{volPending=null;} },250);
+}
+async function cycleNight(){ const order=['Auto','Day','Night']; const cur=lastState.night_vision||'Auto';
+  const nx=order[(order.indexOf(cur)+1)%3]; await patch({night_vision:nx}); toast('night: '+nx); }
+async function toggle(field, onVal){ const cur = (lastState[field]==='true'); await patch({[field]:!cur}); }
+
+// ---- keyboard ----
+addEventListener('keydown', e=>{
+  const typing = /INPUT|TEXTAREA/.test(document.activeElement.tagName);
+  if(e.key==='Enter' && !typing){ $('#tts').focus(); e.preventDefault(); return; }
+  if(typing){ if(e.key==='Escape') document.activeElement.blur(); return; }
+  const dir=KEYMAP[e.key];
+  if(dir){ down.add(dir); e.preventDefault(); return; }
+  if(e.key===' '){ down.clear(); cmd('stop').catch(()=>{}); e.preventDefault(); return; }
+  if(/^[0-9]$/.test(e.key)){ setSpeed(e.key==='0'?100:(+e.key)*10); return; }
+  if(e.key==='+'||e.key==='='){ bumpVol(+5); return; }
+  if(e.key==='-'||e.key==='_'){ bumpVol(-5); return; }
+  const k=e.key.toLowerCase();
+  if(k==='l'){ toggle('laser'); } else if(k==='n'){ cycleNight(); }
+  else if(k==='c'){ toggle('camera'); } else if(k==='m'){ toggle('listen'); }
+  else if(k==='k'){ cmd('dock'); toast('docking'); } else if(k==='?'){ $('#help').classList.toggle('show'); }
+});
+addEventListener('keyup', e=>{ const dir=KEYMAP[e.key]; if(dir) down.delete(dir); });
+addEventListener('blur', ()=>{ down.clear(); });
+
+// ---- buttons ----
+document.querySelectorAll('[data-drive]').forEach(b=>{
+  const dir=b.dataset.drive;
+  const on=()=>down.add(dir), off=()=>down.delete(dir);
+  b.addEventListener('mousedown',on); b.addEventListener('mouseup',off); b.addEventListener('mouseleave',off);
+  b.addEventListener('touchstart',e=>{e.preventDefault();on();}); b.addEventListener('touchend',off);
+});
+$('#stopBtn').onclick=()=>{ down.clear(); cmd('stop'); };
+$('#spdUp').onclick=()=>setSpeed(speed+5); $('#spdDn').onclick=()=>setSpeed(speed-5);
+$('#volUp').onclick=()=>bumpVol(+5); $('#volDn').onclick=()=>bumpVol(-5);
+$('#laser').onclick=()=>toggle('laser'); $('#night').onclick=cycleNight;
+$('#cam').onclick=()=>toggle('camera'); $('#mic').onclick=()=>toggle('listen');
+$('#wakeBtn').onclick=()=>{cmd('wake');toast('waking')};
+$('#dockBtn').onclick=()=>{cmd('dock');toast('docking')};
+$('#sleepBtn').onclick=()=>{cmd('sleep');toast('sleeping')};
+$('#snapBtn').onclick=()=>window.open(`${cfg.base}/api/v1/robots/${cfg.id}/snapshot?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`);
+$('#tts').addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.value.trim()){
+  const body={text:e.target.value.trim()}; const v=$('#voice').value; if(v) body.timbre=v;
+  cmd('say',body); e.target.value=''; e.target.blur(); toast('speaking'); }});
+$('#robotSel').onchange=e=>{ cfg.id=e.target.value; localStorage.ebo_id=cfg.id; startVideo(); openWs(); };
+$('#connBtn').onclick=connect;
+$('#helpBtn').onclick=()=>$('#help').classList.toggle('show');
+
+// ---- settings modal ----
+function openCfg(){ $('#cBase').value=cfg.base; $('#cKey').value=cfg.key; $('#ov').classList.add('show'); $('#cKey').focus(); }
+$('#gear').onclick=openCfg; $('#cCancel').onclick=()=>$('#ov').classList.remove('show');
+$('#cSave').onclick=()=>{ cfg.base=$('#cBase').value.replace(/\/$/,''); cfg.key=$('#cKey').value.trim();
+  localStorage.ebo_base=cfg.base; localStorage.ebo_key=cfg.key; $('#ov').classList.remove('show'); connect(); };
+
+// autostart
+if(cfg.key) connect(); else openCfg();
+</script>
+</body>
+</html>

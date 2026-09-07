@@ -14,7 +14,7 @@ import httpx
 from fastapi import (APIRouter, Depends, FastAPI, Query, Request, Response,
                      WebSocket, WebSocketDisconnect, status)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, StreamingResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 
 from .config import Settings, get_settings
 from .engine import EngineClient
@@ -58,9 +58,17 @@ def get_engine(request: Request, s: Settings = Depends(get_settings)) -> EngineC
 
 
 # ---------------------------------------------------------------- meta (no auth)
+_STATIC = Path(__file__).parent / "static"
+
+
 @app.get("/", include_in_schema=False)
 async def root():
-    return RedirectResponse("/docs")
+    return RedirectResponse("/sandbox")
+
+
+@app.get("/sandbox", include_in_schema=False)
+async def sandbox():
+    return FileResponse(_STATIC / "sandbox.html")
 
 
 @app.get("/health", tags=["meta"], summary="Liveness probe (no auth)")

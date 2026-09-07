@@ -161,3 +161,76 @@ See `.env.example`. Key ones: `EBO_EMAIL`/`EBO_PASSWORD`, `EBO_PAYLOAD_KEY`/`EBO
 Every robot on the account is discovered automatically and appears in `GET /robots` with its own
 `id`. Extra robots also get their own RTSP path/port on the engine (`8555`+). Use the `id` in every
 `/robots/{id}/…` call.
+
+## Sandbox UIs
+
+Two, both served by this API:
+
+- **Swagger** at `/docs` — the *API* sandbox: every endpoint with a "Try it out" that sends real
+  requests (click **Authorize**, paste a key). Plus ReDoc at `/redoc`.
+- **Cockpit** at `/` (→ `/sandbox`) — a single video-first control screen: the live feed fills the
+  view and every control is overlaid on it. Open it, hit ⚙, paste your API base + key. It wakes the
+  robot and turns the camera on automatically.
+
+**Keyboard shortcuts** (the cockpit):
+
+| keys | action |
+|---|---|
+| `↑ ↓ ← →` / `WASD` | drive (hold; combine for turn-while-moving) — release to stop |
+| `Space` | stop |
+| `1`…`9`, `0` | set speed 10–100 |
+| `+` / `−` | volume up/down |
+| `L` `N` `C` `M` | laser · night vision (cycle) · camera · mic |
+| `K` | dock |
+| `Enter` | focus the "Say…" box (type + Enter to speak) |
+| `?` | toggle the shortcut legend |
+
+The cockpit is deliberately dependency-free (one static HTML file, no build step) so it's easy to
+fork into your own frontend. It talks to this API only — same origin, so no CORS to configure.
+
+## Video: how it reaches a browser
+
+The cockpit uses **MJPEG** (`/robots/{id}/stream/mjpeg`) — it drops straight into an `<img src>`,
+is same-origin, and needs no extra ports or libraries. Good enough to drive by (~0.5 s). The API
+key travels as `?token=<key>` because browsers can't set headers on `<img>`.
+
+**Low-latency upgrade — WebRTC (WHEP, ~200 ms).** The engine already publishes WebRTC on port
+`8189` (via mediamtx). To use it from a browser: expose the port and point a small WHEP client at
+it — no new tool to install, mediamtx *is* the server.
+
+```yaml
+# docker-compose.yml → ebo-engine:
+    ports:
+      - "8189:8189/tcp"
+      - "8189:8189/udp"
+```
+Then in the page, POST the SDP offer to `http://<host>:8189/<robot_id>/whep` and attach the answer
+to a `<video>` (any tiny WHEP helper, ~30 lines). Use this when arrow-key driving needs to feel
+instant; keep MJPEG as the fallback.
+
+## Roadmap: on-device vision (YOLO) & autonomous patrol
+
+The next step after the cockpit is a **vision worker** that watches the robot and acts on what it
+sees — your own patrol, not the firmware's.
+
+```
+ebo-engine ──RTSP:8554──▶  ebo-vision (ultralytics YOLO)  ──HTTP──▶  ebo-api  ──▶  robot
+   (source)               detect → decide → act                    (this API)
+```
+
+Design notes (so today's API already fits):
+- **Read the video server-side over RTSP**, not MJPEG — `cv2.VideoCapture("rtsp://ebo-engine:8554/<id>")`
+  feeds `ultralytics` directly, full-res, no browser in the loop. RTSP is exactly the "server tap"
+  in the table above; MJPEG/WebRTC stay the "browser tap".
+- **Act through this API**, not the engine — the worker calls `POST /robots/{id}/move`, `/say`,
+  `/settings`, `/dock`, etc. That keeps auth, validation and safety caps in one place, and means the
+  patrol logic is just another API consumer (same as the cockpit).
+- **A new `ebo-vision` service** in the same compose (build context = your worker), env:
+  `RTSP_URL`, `EBO_API_URL=http://ebo-api:8080`, `EBO_API_KEY`, plus the model + rules. Run it on a
+  box with a GPU if you want real-time; CPU works for low frame rates.
+- **Keep the control loop cautious**: read `/state` before moving, cap speed/duration (the API
+  already validates these), and stop on lost detections — the robot dozes, so re-`/wake` and confirm
+  via `/state`.
+
+Nothing in the current API needs to change to support this — the vision worker is a sibling service
+that consumes the same endpoints your frontend does.

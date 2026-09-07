@@ -40,6 +40,7 @@
 
   <div id="top" class="hud"><div><b id="title">EBO Boss Hunt</b><br><span id="conn">desconectado</span></div></div>
   <div id="topr" class="hud">
+    <button class="btn" id="dbgBtn" title="ver la salida cruda de YOLO-seg (tecla D)">Debug</button>
     <button class="btn" id="connBtn">Conectar</button>
     <button class="btn" id="gear">⚙</button>
   </div>
@@ -91,9 +92,31 @@ function videoRect(){
 const depthScale=d=> d==null ? 1 : (1.35 - 0.8*Math.max(0,Math.min(1,d)));
 
 // ---- render loop ----
+// ---- debug: raw YOLO-seg output (boxes + masks + label/conf/depth/track) ----
+let debug = localStorage.g_debug==='1';
+function setDebug(v){ debug=v; localStorage.g_debug=v?'1':'0'; $('#dbgBtn').classList.toggle('act',v); }
+function drawDebug(R, dets){
+  ctx.font='12px ui-monospace,monospace'; ctx.textAlign='left';
+  for(const d of dets){
+    const [nx,ny,nw,nh]=d.bbox, x=R.x+nx*R.w, y=R.y+ny*R.h, w=nw*R.w, h=nh*R.h;
+    const isA=(d.role||'')==='boss', col=isA?'#39d98a':'#3ea6ff';
+    if(d.mask){ ctx.fillStyle=hexA(col,.16); ctx.strokeStyle=hexA(col,.9); ctx.lineWidth=1.5;
+      for(const poly of d.mask){ ctx.beginPath();
+        poly.forEach((p,i)=>{ const px=R.x+p[0]*R.w, py=R.y+p[1]*R.h; i?ctx.lineTo(px,py):ctx.moveTo(px,py); });
+        ctx.closePath(); ctx.fill(); ctx.stroke(); } }
+    ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,h);
+    const txt=`${d.label} ${Math.round((d.conf||0)*100)}%  d=${d.depth==null?'?':(+d.depth).toFixed(2)}  id=${d.track_id??'-'}`;
+    const tw=ctx.measureText(txt).width+8;
+    ctx.fillStyle='rgba(0,0,0,.72)'; ctx.fillRect(x, y-16, tw, 16);
+    ctx.fillStyle=col; ctx.fillText(txt, x+4, y-4);
+  }
+}
+
 function draw(){
   ctx.clearRect(0,0,fx.width,fx.height);
   const R=videoRect(); const dets=(latest.frame&&latest.frame.detections)||[];
+  if(debug){ drawDebug(R, dets); $('#count').textContent=`YOLO-seg: ${dets.length} objetos (debug)`;
+             requestAnimationFrame(draw); return; }
   // far → near so nearer bosses draw on top (depth ordering)
   const order=[...dets].sort((a,b)=>(b.depth??0.5)-(a.depth??0.5));
   let bosses=0, npcs=0;
@@ -186,6 +209,8 @@ $('#hit').addEventListener('click', async ev=>{
 // ---- settings ----
 function openCfg(){ $('#cBase').value=cfg.base; $('#cKey').value=cfg.key; $('#cId').value=cfg.id; $('#cfg').classList.add('show'); }
 $('#gear').onclick=openCfg; $('#connBtn').onclick=connect; $('#cCancel').onclick=()=>$('#cfg').classList.remove('show');
+$('#dbgBtn').onclick=()=>setDebug(!debug); setDebug(debug);
+addEventListener('keydown',e=>{ if((e.key==='d'||e.key==='D') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) setDebug(!debug); });
 $('#cSave').onclick=()=>{ cfg.base=$('#cBase').value.replace(/\/$/,''); cfg.key=$('#cKey').value.trim(); cfg.id=$('#cId').value.trim()||'ebo';
   localStorage.g_base=cfg.base; localStorage.g_key=cfg.key; localStorage.g_id=cfg.id; $('#cfg').classList.remove('show'); connect(); };
 

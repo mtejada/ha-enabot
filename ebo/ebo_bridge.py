@@ -77,7 +77,14 @@ OP_SET_SPEED = 103009
 OP_LASER = 103051
 # extra commands, derived from the app's command set for interoperability.
 # See docs/COMANDI.md for the full catalog. Simple, well-formed payloads only.
-OP_SAY = 103501         # text-to-speech: {"userId":..,"text":".."} — robot speaks
+OP_SAY = 103501         # text-to-speech: {"userId","text"[,"timbre","language"]} — robot speaks
+# SE 2 / newer models: OP_SAY needs a valid voice `timbre` and `language` (values come from the
+# cloud ai/conf list, e.g. GET /api/v1/ebox/robots/ai/conf?machine_version=ebo%20se%202); with them
+# missing the robot ACKs status:0 but stays SILENT. The Air 2 accepted just {userId,text} and
+# ignores the extra fields, so sending them is safe for every model. Override per model/user via
+# EBO_TTS_TIMBRE / EBO_TTS_LANGUAGE, or per message with a JSON `say` payload.
+TTS_TIMBRE = os.environ.get("EBO_TTS_TIMBRE", "en-US-AvaMultilingualNeural")
+TTS_LANGUAGE = os.environ.get("EBO_TTS_LANGUAGE", "en-US")
 OP_SLEEP = 101047       # sleep/wake: {"isSleeping": bool} — no movement
 OP_VOLUME = 102023      # {"playbackVolume": int, "isPlaybackMuted": bool}
 OP_SPORTS_REC = 101049  # motion recording: {"sportsRecord": bool}
@@ -1636,8 +1643,21 @@ class Bridge:
                 self._wake_full()
             elif topic.endswith("/say"):
                 if payload:
-                    self.send(OP_SAY, {"userId": self.account, "text": payload})
-                    self.mqtt.publish("%s/say/state" % NODE, payload)
+                    # payload is plain text, OR JSON {"text",["timbre"],["language"]} to pick a
+                    # voice per message. timbre/language matter on the SE 2 (see OP_SAY note).
+                    text, timbre, language = payload, TTS_TIMBRE, TTS_LANGUAGE
+                    if payload.lstrip().startswith("{"):
+                        try:
+                            o = json.loads(payload)
+                            text = str(o.get("text", "") or "")
+                            timbre = o.get("timbre") or TTS_TIMBRE
+                            language = o.get("language") or TTS_LANGUAGE
+                        except Exception:
+                            pass
+                    if text:
+                        self.send(OP_SAY, {"userId": self.account, "text": text,
+                                           "timbre": timbre, "language": language})
+                        self.mqtt.publish("%s/say/state" % NODE, text)
             elif topic.endswith("/talk/stop"):
                 # end a live push-to-talk: drop what's queued and break the current playback
                 self._talk_stop = True

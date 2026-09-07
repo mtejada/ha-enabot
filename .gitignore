@@ -2,3 +2,12 @@ __pycache__/
 *.pyc
 .env
 secrets.env
+
+# --- secrets / local engine runtime (never commit) ---
+.env
+secrets.env
+options.json
+api_token
+session.json
+data/
+*.apk

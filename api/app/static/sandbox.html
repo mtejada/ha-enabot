@@ -207,6 +207,7 @@ const cfg = {
   id:   localStorage.ebo_id   || '',
 };
 let ws=null, lastState={}, speed=+(localStorage.ebo_speed||45), volPending=null, lastTele=0;
+let asleep=false;   // user pressed Sleep → keep it resting; the doze watchdog must NOT auto-wake it
 
 function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),1400); }
 function auth(){ return { 'Authorization':'Bearer '+cfg.key }; }
@@ -222,6 +223,7 @@ const patch = body => api(`/api/v1/robots/${cfg.id}/settings`, {method:'PATCH', 
 // ---- connect ----
 async function connect(){
   if(!cfg.key || !cfg.base){ openCfg(); return; }
+  asleep=false; lastTele=Date.now();      // an explicit connect cancels a prior Sleep
   try{
     const robots = await api('/api/v1/robots');
     if(!robots.length){ toast('no robots'); return; }
@@ -405,11 +407,12 @@ async function toggleHear(){
     r.muted=true; toast('audio silenciado');
   }
 }
-$('#wakeBtn').onclick=()=>{cmd('wake');startVideo();lastTele=Date.now();toast('waking')};
+$('#wakeBtn').onclick=()=>{asleep=false;cmd('wake');startVideo();lastTele=Date.now();toast('waking')};
 // doze watchdog: the SE 2 naps hard — when telemetry stops arriving the session is stale and video
-// freezes. Detect the gap, wake the robot and reconnect the video automatically.
+// freezes. Detect the gap, wake the robot and reconnect the video automatically. SKIPPED while the
+// user has chosen Sleep, so pressing Sleep actually keeps it asleep (battery) instead of bouncing back.
 setInterval(()=>{
-  if(!cfg.id || !cfg.key || !lastTele) return;
+  if(asleep || !cfg.id || !cfg.key || !lastTele) return;
   if(Date.now()-lastTele > 10000){
     lastTele = Date.now();                 // don't hammer; wait another window before retrying
     toast('robot dozed — reconnecting…');
@@ -417,7 +420,16 @@ setInterval(()=>{
   }
 },5000);
 $('#dockBtn').onclick=()=>{cmd('dock');toast('docking')};
-$('#sleepBtn').onclick=()=>{cmd('sleep');toast('sleeping')};
+// Sleep = rest NOW: tell the robot to sleep (ZZ), turn its camera off, drop our video, and stop the
+// watchdog from re-waking it. It stays asleep (saving battery) until you press Connect or Wake.
+$('#sleepBtn').onclick=()=>{
+  asleep=true;
+  cmd('sleep').catch(()=>{});
+  patch({camera:false}).catch(()=>{});
+  stopWebRTC(); stopMjpeg();
+  vstat('wait','—','dormido'); $('#novid').style.display='';
+  toast('durmiendo — Connect/Wake para despertar');
+};
 $('#snapBtn').onclick=()=>window.open(`${cfg.base}/api/v1/robots/${cfg.id}/snapshot?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`);
 $('#tts').addEventListener('keydown', e=>{ if(e.key==='Enter' && e.target.value.trim()){
   const body={text:e.target.value.trim()}; const v=$('#voice').value; if(v) body.timbre=v;

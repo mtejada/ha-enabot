@@ -161,7 +161,11 @@ def real_loop():
     track_hits: dict[int, int] = {}   # track_id -> consecutive frames seen (persistence gate)
     while True:
         t0 = time.time()
-        if t0 - last_ka > CAMERA_KEEPALIVE:
+        # CAMERA_KEEPALIVE<=0 disables the keepalive entirely. Default off: an always-on keepalive
+        # re-asserts camera/activity forever and blocks the engine's auto-standby, so the robot never
+        # sleeps and drains its battery when nobody is watching. The frontends keepalive while open;
+        # when no page is open we WANT the robot to doze.
+        if CAMERA_KEEPALIVE > 0 and t0 - last_ka > CAMERA_KEEPALIVE:
             camera_keepalive(); last_ka = t0
         ok, frame = cap.read()                                 # BGR
         if not ok or frame is None:

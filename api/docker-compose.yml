@@ -23,9 +23,11 @@ services:
       # WebRTC ICE hosts: IP(s) the browser can reach (mediamtx advertises these). Through Docker
       # you MUST set this — 127.0.0.1 for a browser on this machine, or your LAN IP for other devices.
       EBO_HOST_IPS: ${EBO_HOST_IPS:-127.0.0.1}
-      # 0 = never drop the Agora session (keeps control alive for an interactive API);
-      # set minutes >0 to let the robot sleep after idle.
-      EBO_STANDBY_MINUTES: ${EBO_STANDBY_MINUTES:-0}
+      # Minutes of no activity after which the engine drops the Agora session so the robot SLEEPS
+      # (saves battery — critical when it's off the dock). The frontends wake it on connect and the
+      # engine self-heals a stale session, so a timeout is safe. 0 = never sleep (only if you need
+      # the robot permanently live). Also gates sleep-on-dock.
+      EBO_STANDBY_MINUTES: ${EBO_STANDBY_MINUTES:-10}
     volumes:
       - engine_data:/data
     ports:
@@ -76,6 +78,9 @@ services:
       CONF: ${VISION_CONF:-0.25}
       MIN_TRACK_HITS: ${VISION_MIN_TRACK_HITS:-3}
       MAX_DET_AREA: ${VISION_MAX_DET_AREA:-0.55}
+      # 0 = worker never re-asserts camera (so it can't block the engine's auto-standby → the robot
+      # sleeps when no one is watching and doesn't drain its battery). >0 secs to force keepalive.
+      CAMERA_KEEPALIVE: ${VISION_CAMERA_KEEPALIVE:-0}
     volumes:
       - vision_weights:/weights                  # persist auto-downloaded model weights
 

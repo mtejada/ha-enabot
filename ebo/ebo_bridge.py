@@ -879,12 +879,23 @@ class Bridge:
           * DEEP sleep (it drove home to the dock and shows the ZZ eyes) -> it left Agora entirely,
             so no opcode of ours reaches it; only a fresh CLOUD session does.
         Only ever called from the explicit 'wake' command, never from the connect path."""
+        if not self.connected:
+            # Deep sleep: we left the Agora channel (Sleep button / auto-standby) and so did the
+            # robot. An in-process set_connected(True) here is UNRELIABLE — the robot tends to come
+            # back "not streaming" with a dead control channel (a racing camera-on rejoin disrupts
+            # the fresh session mid-ramp). A fresh PROCESS reliably revives it (verified: full video
+            # + control return after a restart). run.sh relaunches immediately; the UIs poll snapshot
+            # readiness on connect, so they ride out the ~10 s gap.
+            log("[wake] deep sleep — restarting the bridge for a clean session (reliable revive)")
+            try:
+                sys.stdout.flush(); sys.stderr.flush()
+            except Exception:
+                pass
+            os._exit(0)
         self._wake()
         try:
-            if not self.connected:
-                self.set_connected(True)          # refreshes the cloud session on its own
-            elif not (self.video and self.video.is_streaming()):
-                self._force_rejoin()              # deep sleep: needs the fresh cloud session
+            if not (self.video and self.video.is_streaming()):
+                self._force_rejoin()              # connected but dozed under us — a rejoin wakes it
         except Exception as e:
             log("[wake] rejoin after wake failed:", e)
 

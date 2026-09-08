@@ -226,15 +226,25 @@ async function connect(){
   asleep=false; lastTele=Date.now();      // an explicit connect cancels a prior Sleep
   try{
     const robots = await api('/api/v1/robots');
-    if(!robots.length){ toast('no robots'); return; }
-    const sel=$('#robotSel'); sel.innerHTML='';
-    robots.forEach(r=>{ const o=document.createElement('option'); o.value=r.id; o.textContent=(r.name||r.id)+' · '+(r.model||''); sel.appendChild(o); });
-    if(!cfg.id || !robots.find(r=>r.id===cfg.id)) cfg.id=robots[0].id;
-    sel.value=cfg.id; localStorage.ebo_id=cfg.id;
-    await cmd('wake'); await patch({camera:true});           // ensure the stream is live
-    startVideo(); openWs(); loadVoices(); pushSpeed();
-    toast('connected');
-  }catch(e){ toast('connect failed'); }
+    if(robots && robots.length){
+      const sel=$('#robotSel'); sel.innerHTML='';
+      robots.forEach(r=>{ const o=document.createElement('option'); o.value=r.id; o.textContent=(r.name||r.id)+' · '+(r.model||''); sel.appendChild(o); });
+      if(!cfg.id || !robots.find(r=>r.id===cfg.id)) cfg.id=robots[0].id;
+      sel.value=cfg.id; localStorage.ebo_id=cfg.id;
+    }
+  }catch(e){ /* engine may be mid-restart; keep going and poll */ }
+  if(!cfg.id) cfg.id='ebo';
+  // Waking from a deep sleep restarts the engine for a clean session, so tolerate errors here and
+  // then wait until the stream is genuinely live (snapshot 200) before starting video.
+  toast('waking…');
+  try{ await cmd('wake'); }catch(_){}
+  try{ await patch({camera:true}); }catch(_){}
+  for(let i=0;i<22;i++){
+    try{ const r=await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/snapshot?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`); if(r.ok) break; }catch(_){}
+    $('#conn').textContent='esperando video… '+(i+1); await new Promise(r=>setTimeout(r,1000));
+  }
+  startVideo(); openWs(); loadVoices(); pushSpeed();
+  lastTele=Date.now(); toast('connected');
 }
 // ---- video: WebRTC (low latency) with MJPEG fallback ----
 let videoMode = localStorage.ebo_vmode || 'auto';   // 'auto' (try WebRTC) | 'mjpeg'
@@ -407,7 +417,9 @@ async function toggleHear(){
     r.muted=true; toast('audio silenciado');
   }
 }
-$('#wakeBtn').onclick=()=>{asleep=false;cmd('wake');startVideo();lastTele=Date.now();toast('waking')};
+// Wake goes through connect() so it rides out the engine restart that a deep-sleep wake triggers
+// (waits for the stream to come live instead of firing startVideo into a restarting engine).
+$('#wakeBtn').onclick=()=>{ asleep=false; connect(); };
 // doze watchdog: the SE 2 naps hard — when telemetry stops arriving the session is stale and video
 // freezes. Detect the gap, wake the robot and reconnect the video automatically. SKIPPED while the
 // user has chosen Sleep, so pressing Sleep actually keeps it asleep (battery) instead of bouncing back.

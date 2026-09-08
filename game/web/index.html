@@ -110,8 +110,10 @@ async function connect(){
   if(!cfg.key){ openCfg(); return; }
   $('#conn').textContent='despertando robot…';
   await wakeRobot();
-  // esperar a que el stream esté REALMENTE arriba (snapshot 200) antes de negociar WebRTC/WHEP
-  for(let i=0;i<10;i++){
+  // esperar a que el stream esté REALMENTE arriba (snapshot 200) antes de negociar WebRTC/WHEP.
+  // Un wake desde sueño profundo reinicia el engine para una sesión limpia (~15-25s), así que
+  // esperamos con holgura.
+  for(let i=0;i<22;i++){
     try{ const r=await fetch(`${cfg.base}/api/v1/robots/${cfg.id}/snapshot?token=${encodeURIComponent(cfg.key)}&t=${Date.now()}`); if(r.ok) break; }catch(_){}
     $('#conn').textContent=`esperando video… ${i+1}`; await new Promise(r=>setTimeout(r,1000));
   }

@@ -1717,7 +1717,17 @@ class Bridge:
                 self.set_move(v.get("lx", 0), v.get("ly", 0), v.get("rx", 0),
                               v.get("ry", 0), v.get("hold", 0.6), v.get("buttons", 0))
             elif topic.endswith("/sleep/set"):
-                self.send(OP_SLEEP, {"isSleeping": payload.lower() in ("on", "true", "1")})
+                slp = payload.lower() in ("on", "true", "1")
+                self.send(OP_SLEEP, {"isSleeping": slp})
+                if slp:
+                    # Real sleep = LEAVE the Agora channel, like closing the app. Just sending the
+                    # opcode while we stay a viewer keeps the robot awake (eyes blinking) — our
+                    # presence holds it up. Dropping the session lets it actually go ZZ (and rest the
+                    # battery). Wake/connect rejoins.
+                    try:
+                        self.set_connected(False)
+                    except Exception as e:
+                        log("[sleep] releasing session failed:", e)
             elif topic.endswith("/wake"):
                 self._wake_full()
             elif topic.endswith("/say"):

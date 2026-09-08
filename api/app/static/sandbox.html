@@ -14,7 +14,10 @@
   html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
     font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;overflow:hidden;user-select:none}
   #stage{position:fixed;inset:0;display:grid;place-items:center;background:#000}
-  #video,#rtc{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#000}
+  /* the SE 2 sensor is dim in low light — a modest brightness/contrast lift makes the feed readable
+     without washing out a well-lit scene (tweak --vfilter or toggle via the ☀ button) */
+  #video,#rtc{max-width:100%;max-height:100%;object-fit:contain;display:block;background:#000;
+    filter:var(--vfilter,brightness(1.22) contrast(1.06) saturate(1.05))}
   #novid{position:absolute;color:var(--mut);text-align:center;font-size:13px}
   .hud{position:fixed;z-index:5;background:var(--panel);backdrop-filter:blur(8px);
     border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
@@ -90,11 +93,21 @@
     #voice{flex:1 1 120px;max-width:46vw}
     #help{max-width:calc(100vw - 24px)}
   }
-  /* very short (landscape phones): shrink dpad + dock so they don't swallow the video */
-  @media (max-height:460px){
-    #dock{gap:6px 8px;padding:7px;bottom:6px}
-    .dpad{grid-template-columns:repeat(3,42px);grid-template-rows:repeat(3,42px)}
+  /* landscape phones (short height): the wrapping dock swallowed the video. Make it ONE compact
+     horizontal strip that scrolls sideways — height ≈ the dpad — so most of the screen stays video. */
+  @media (max-height:520px){
+    #dock{left:6px;right:6px;bottom:6px;transform:none;max-width:none;width:auto;
+          flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;justify-content:flex-start;
+          gap:8px;padding:7px 9px;-webkit-overflow-scrolling:touch}
+    #dock .group{flex:0 0 auto;border-right:1px solid var(--line);padding-right:8px}
+    #dock .group:last-child{border:0;padding-right:0}
+    .dpad{grid-template-columns:repeat(3,34px);grid-template-rows:repeat(3,34px);gap:4px}
+    .dpad .btn{font-size:15px}
     .btn{padding:7px 9px}
+    .meter{min-width:40px} .meter b{font-size:15px}
+    input[type=text]{flex:0 0 150px;width:150px}
+    #voice{flex:0 0 130px;max-width:none}
+    .glabel{display:none}                     /* free width; the buttons are self-evident */
   }
 </style>
 </head>
